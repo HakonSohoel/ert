@@ -39,7 +39,7 @@ Check coverage
 After evaluating the prior, we can look at the result in `Create plot`. We check that there is good coverage in the prior,
 with ensembles both inside and outside the observation uncertainty, as well as higher and lower values than the observations.
 
-We also observe that the parameters are unchanged, as in the last step we only ran there forward model, we did not draw
+We also observe that the parameters are unchanged, as in the last step we only ran the forward model, we did not draw
 a new prior.
 
 .. image:: fig/prior_response.png
