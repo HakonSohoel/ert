@@ -508,7 +508,7 @@ Will create a symbolic link with name :code:`<LINKNAME>` which points to
             examples="""
             .. code-block:: bash
 
-FORWARD_MODEL SYMLINK(<TARGET>=path/to/target,<LINKNAME>=linkname)
+                FORWARD_MODEL SYMLINK(<TARGET>=path/to/target,<LINKNAME>=linkname)
 """,
         )
 
