@@ -121,6 +121,7 @@ dev = [
     "resdata",
     "resfo",
     "rust-just",
+    "scikit-image",
     "sphinx",
     "sphinx-argparse",
     "sphinx-autoapi",
