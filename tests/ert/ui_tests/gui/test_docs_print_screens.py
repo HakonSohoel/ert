@@ -1,9 +1,10 @@
 import os.path
 import shutil
 
-import pytest
 from skimage import io
 from skimage.metrics import structural_similarity as ssim
+
+from ert.run_models import EnsembleExperiment
 
 # "docs/ert/theory/images/posterior_path.png". # NA
 # "docs/ert/about/v9_auto_scale.png" # Not used
@@ -12,26 +13,25 @@ from skimage.metrics import structural_similarity as ssim
 # "docs/ert/about/click-on-stderr.png" # Ref to a spesific version of ert, so will not change
 # "docs/ert/about/click-show-details.png" # Ref to a spesific version of ert, so will not change
 # "docs/ert/about/v9_update_param.png" # Ref to a spesific version of ert, so will not change
-"docs/ert/img/logo.png"
-"docs/ert/reference/configuration/fig/errf_symmetric_uniform.png"
-"docs/ert/reference/configuration/fig/truncated_ok.png"
-"docs/ert/reference/configuration/fig/const.png"
-"docs/ert/reference/configuration/fig/lognormal.png"
-"docs/ert/reference/configuration/fig/derrf_symmetric_uniform.png"
-"docs/ert/reference/configuration/fig/dunif.png"
-"docs/ert/reference/configuration/fig/loguniform.png"
-"docs/ert/reference/configuration/fig/triangular.png"
-"docs/ert/reference/configuration/fig/derrf_right_skewed.png"
-"docs/ert/reference/configuration/fig/normal.png"
-"docs/ert/reference/configuration/fig/uniform.png"
-"docs/ert/reference/configuration/fig/errf_right_skewed_unimodal.png"
+# "docs/ert/img/logo.png" # NA
+# "docs/ert/reference/configuration/fig/errf_symmetric_uniform.png" #NA
+# "docs/ert/reference/configuration/fig/truncated_ok.png" # NA
+# "docs/ert/reference/configuration/fig/const.png" # NA
+# "docs/ert/reference/configuration/fig/lognormal.png" # NA
+# "docs/ert/reference/configuration/fig/derrf_symmetric_uniform.png" # NA
+# "docs/ert/reference/configuration/fig/dunif.png" # NA
+# "docs/ert/reference/configuration/fig/loguniform.png" # NA
+# "docs/ert/reference/configuration/fig/triangular.png" # NA
+# "docs/ert/reference/configuration/fig/derrf_right_skewed.png" # NA
+# "docs/ert/reference/configuration/fig/normal.png" # NA
+# "docs/ert/reference/configuration/fig/uniform.png" # NA
+# "docs/ert/reference/configuration/fig/errf_right_skewed_unimodal.png" # NA
 "docs/ert/getting_started/configuration/poly_new/with_observations/plot_obs.png"
 "docs/ert/getting_started/configuration/poly_new/with_observations/coeff_a.png"
 "docs/ert/getting_started/configuration/poly_new/with_observations/coeff_b.png"
 "docs/ert/getting_started/configuration/poly_new/with_observations/coeff_c.png"
 "docs/ert/getting_started/configuration/poly_new/minimal/warning.png"
 "docs/ert/getting_started/configuration/poly_new/minimal/startdialog.png"
-"docs/ert/getting_started/configuration/poly_new/minimal/simulations.png"
 "docs/ert/getting_started/configuration/poly_new/minimal/ert.png"
 "docs/ert/getting_started/configuration/poly_new/with_results/plots.png"
 "docs/ert/getting_started/configuration/poly_new/with_results/poly_plot.png"
@@ -51,39 +51,8 @@ from skimage.metrics import structural_similarity as ssim
 "docs/everest/images/Everest_vs_Ert_01.png"
 
 
-def _generate_poly_new_minimal_ert_printscreen(gui, qtbot):
+def gui_has_significant_change(gui, qtbot, current_image_path):
     temp_image_path = qtbot.screenshot(gui)
-
-    return temp_image_path
-
-
-@pytest.mark.parametrize(
-    ("image_path", "get_temp_image_path"),
-    [
-        (
-            "docs/ert/getting_started/configuration/poly_new/minimal/ert.png",
-            _generate_poly_new_minimal_ert_printscreen,
-        ),
-    ],
-)
-def test_poly_new_minimal_ert_printscreen(
-    opened_main_window_minimal_realizations,
-    qtbot,
-    source_root,
-    image_path,
-    get_temp_image_path,
-):
-    """This tests verifies that weights are stored in the metadata.json file
-    when running esmda and that the content is read back and populated in the
-    GUI when enabling restart functionality.
-    """
-
-    current_image_path = os.path.join(source_root, image_path)
-
-    gui = opened_main_window_minimal_realizations
-
-    temp_image_path = _generate_poly_new_minimal_ert_printscreen(gui, qtbot)
-
     new_image = io.imread(temp_image_path, as_gray=True)
     current_image = io.imread(current_image_path, as_gray=True)
 
@@ -95,13 +64,49 @@ def test_poly_new_minimal_ert_printscreen(
         )
 
         significant_change = (
-            similarity_index <= 0.99
+            similarity_index <= 0.99999
         )  # This needs to be tuned. Minor changes like temp path is expected.
 
     if significant_change:
         shutil.move(temp_image_path, current_image_path)
 
-    assert not significant_change, f"""
+    return significant_change
+
+
+def test_poly_new_minimal_ert_printscreen(
+    opened_main_window_minimal_realizations,
+    qtbot,
+    source_root,
+):
+    current_image_path = os.path.join(
+        source_root, "docs/ert/getting_started/configuration/poly_new/minimal/ert.png"
+    )
+    gui = opened_main_window_minimal_realizations
+
+    assert not gui_has_significant_change(gui, qtbot, current_image_path), f"""
+        The auto generated image differed from the current image used in the docs
+
+        The image {current_image_path} has been overwritten with the new version.
+        If the new version seems correct it should be kept.
+        If the autogenerated image seems incorrect the underlying code generating the
+        gui might need corrections or this test needs to be fixed.
+        """
+
+
+def test_poly_new_minimal_simulations(
+    opened_main_window_poly,
+    run_experiment,
+    qtbot,
+    source_root,
+):
+    current_image_path = os.path.join(
+        source_root,
+        "docs/ert/getting_started/configuration/poly_new/minimal/simulations.png",
+    )
+    gui = opened_main_window_poly
+    run_experiment(EnsembleExperiment, gui)
+
+    assert not gui_has_significant_change(gui, qtbot, current_image_path), f"""
         The auto generated image differed from the current image used in the docs
 
         The image {current_image_path} has been overwritten with the new version.
