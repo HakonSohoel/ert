@@ -108,6 +108,14 @@ def opened_main_window_minimal_realizations(source_root, tmp_path, monkeypatch):
     yield from open_gui_with_config(tmp_path / "poly.ert")
 
 
+@pytest.fixture
+def opened_main_window_configuration_guide_start(source_root, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    output_file = Path("poly.ert")
+    output_file.write_text("NUM_REALIZATIONS 5")
+    yield from open_gui_with_config(output_file)
+
+
 @pytest.fixture(scope="module")
 def _esmda_run(run_experiment, source_root, tmp_path_factory):
     path = tmp_path_factory.mktemp("test-data")
