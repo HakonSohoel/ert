@@ -82,6 +82,8 @@ It has been verified that fonts are present in the system by calling fc-list,
 but qt are not able to detect these fonts for some reason.
 """
 
+FIXED_RANDOM_SEED = 11223344
+
 
 def run_experiment(qtbot, experiment_mode, gui, click_done=True):
     # Select correct experiment in the simulation panel
@@ -281,7 +283,9 @@ def test_that_poly_new_with_results_screenshots_are_up_to_date(
         source_root, "docs/ert/getting_started/configuration/poly_new/with_results"
     )
 
-    gui = open_gui_with_docs_example(tmp_path, example_folder, "poly.ert", 11223344)
+    gui = open_gui_with_docs_example(
+        tmp_path, example_folder, "poly.ert", FIXED_RANDOM_SEED
+    )
 
     if not gui.available_fonts:
         pytest.skip(SKIP_MESSAGE)
@@ -319,7 +323,7 @@ def test_that_poly_new_with_observations_screenshots_are_up_to_date(
     )
 
     gui = open_gui_with_docs_example(
-        tmp_path, example_folder, "poly_final.ert", 11223344
+        tmp_path, example_folder, "poly_final.ert", FIXED_RANDOM_SEED
     )
 
     if not gui.available_fonts:
@@ -377,7 +381,7 @@ def test_that_poly_new_with_more_observations_screenshots_are_up_to_date(
     )
 
     gui = open_gui_with_docs_example(
-        tmp_path, example_folder, "poly_final.ert", 11223344
+        tmp_path, example_folder, "poly_final.ert", FIXED_RANDOM_SEED
     )
 
     if not gui.available_fonts:
