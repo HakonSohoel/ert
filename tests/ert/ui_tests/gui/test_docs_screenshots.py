@@ -161,7 +161,7 @@ def gui_has_significant_change(gui, qtbot, current_image_path, threshold=0.99):
     return significant_change
 
 
-def assert_error_message(gui_changed):
+def assertion_error_message(gui_changed):
     newline = "\n         - "
     return dedent(
         f"""
@@ -240,7 +240,7 @@ def test_that_poly_new_minimal_screenshots_are_up_to_date(
 
     compare_img_with_gui(gui_changed, example_folder, "simulations.png", gui, qtbot)
 
-    assert not gui_changed, assert_error_message(gui_changed)
+    assert not gui_changed, assertion_error_message(gui_changed)
 
 
 def test_that_poly_new_with_simple_script_screenshots_are_up_to_date(
@@ -266,7 +266,7 @@ def test_that_poly_new_with_simple_script_screenshots_are_up_to_date(
     clean_up_diplayed_runpath(gui)
 
     assert not gui_has_significant_change(gui, qtbot, current_image_path), (
-        assert_error_message([current_image_path])
+        assertion_error_message([current_image_path])
     )
 
 
@@ -306,7 +306,7 @@ def test_that_poly_new_with_results_screenshots_are_up_to_date(
 
         compare_img_with_gui(gui_changed, example_folder, "plots.png", gui, qtbot)
 
-    assert not gui_changed, assert_error_message(gui_changed)
+    assert not gui_changed, assertion_error_message(gui_changed)
 
 
 def test_that_poly_new_with_observations_screenshots_are_up_to_date(
@@ -363,7 +363,7 @@ def test_that_poly_new_with_observations_screenshots_are_up_to_date(
         set_data_type_selection_index(data_type_widget, 3)
         compare_img_with_gui(gui_changed, example_folder, "coeff_c.png", gui, qtbot)
 
-    assert not gui_changed, assert_error_message(gui_changed)
+    assert not gui_changed, assertion_error_message(gui_changed)
 
 
 def test_that_poly_new_with_more_observations_screenshots_are_up_to_date(
@@ -414,4 +414,4 @@ def test_that_poly_new_with_more_observations_screenshots_are_up_to_date(
 
         compare_img_with_gui(gui_changed, example_folder, "coeff_b.png", gui, qtbot)
 
-    assert not gui_changed, assert_error_message(gui_changed)
+    assert not gui_changed, assertion_error_message(gui_changed)
