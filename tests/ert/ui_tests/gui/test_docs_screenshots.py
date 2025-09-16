@@ -338,18 +338,18 @@ def test_that_poly_new_with_observations_screenshots_are_up_to_date(
         assert button_plot_tool
         qtbot.mouseClick(button_plot_tool, Qt.MouseButton.LeftButton)
 
-        ensamble_selector_widget = wait_for_child(
+        ensemble_selector_widget = wait_for_child(
             gui, qtbot, EnsembleSelectionWidget, "Plot ensemble"
         )
 
         for index in range(
-            ensamble_selector_widget._EnsembleSelectionWidget__dndlist.count()
+            ensemble_selector_widget._EnsembleSelectionWidget__dndlist.count()
         ):
-            item = ensamble_selector_widget._EnsembleSelectionWidget__dndlist.item(
+            item = ensemble_selector_widget._EnsembleSelectionWidget__dndlist.item(
                 index
             )
             item.setData(Qt.ItemDataRole.CheckStateRole, True)
-        ensamble_selector_widget._EnsembleSelectionWidget__dndlist.ensembleSelectionListChanged.emit()
+        ensemble_selector_widget._EnsembleSelectionWidget__dndlist.ensembleSelectionListChanged.emit()
 
         compare_img_with_gui(gui_changed, example_folder, "plot_obs.png", gui, qtbot)
 
@@ -396,18 +396,18 @@ def test_that_poly_new_with_more_observations_screenshots_are_up_to_date(
         assert button_plot_tool
         qtbot.mouseClick(button_plot_tool, Qt.MouseButton.LeftButton)
 
-        ensamble_selector_widget = wait_for_child(
+        ensemble_selector_widget = wait_for_child(
             gui, qtbot, EnsembleSelectionWidget, "Plot ensemble"
         )
 
         for index in range(
-            ensamble_selector_widget._EnsembleSelectionWidget__dndlist.count()
+            ensemble_selector_widget._EnsembleSelectionWidget__dndlist.count()
         ):
-            item = ensamble_selector_widget._EnsembleSelectionWidget__dndlist.item(
+            item = ensemble_selector_widget._EnsembleSelectionWidget__dndlist.item(
                 index
             )
             item.setData(Qt.ItemDataRole.CheckStateRole, True)
-        ensamble_selector_widget._EnsembleSelectionWidget__dndlist.ensembleSelectionListChanged.emit()
+        ensemble_selector_widget._EnsembleSelectionWidget__dndlist.ensembleSelectionListChanged.emit()
 
         data_type_widget = wait_for_child(gui, qtbot, DataTypeKeysWidget, "Data types")
         set_data_type_selection_index(data_type_widget, 2)
