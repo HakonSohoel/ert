@@ -25,6 +25,14 @@ from tests.ert.unit_tests.gui.simulation.test_run_path_dialog import (
 
 from .conftest import wait_for_child
 
+# List of png files under docs that are either:
+#  - not screenshots of the gui
+# or:
+#  - screenshots of the gui tied to a specific version of ert that will not change
+# and are therefore not applicable for generation.
+# Not currently used, but left here as a convenience for future work on these tests
+# and in case we want to verify that all pngs under docs are tested for change unless
+# they are listed as not applicable
 PNGS_NOT_APPLICABLE_FOR_GENERATION = [
     "docs/ert/theory/images/posterior_path.png",
     "docs/ert/about/v9_auto_scale.png",
@@ -59,6 +67,8 @@ PNGS_NOT_APPLICABLE_FOR_GENERATION = [
     "docs/everest/images/Everest_vs_Ert_01.png",
 ]
 
+# List of png files under docs that could be tested for change
+# and generated, but that has not yet been added to a test.
 TODOS = [
     "docs/ert/getting_started/updating_parameters/fig/update_report.png",
     "docs/ert/getting_started/howto/restart-es-mda.png",
