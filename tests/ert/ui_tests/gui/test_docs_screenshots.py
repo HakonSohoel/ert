@@ -5,7 +5,7 @@ from textwrap import dedent
 import pytest
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QComboBox, QToolButton, QWidget
-from skimage import io
+from skimage import io, transform
 from skimage.metrics import structural_similarity as ssim
 
 from ert.gui.ertwidgets import CopyableLabel
@@ -151,14 +151,13 @@ class GuiEvaluator:
     def gui_change_detected(self):
         return len(self.gui_changed) > 0
 
-    def _get_ssim_score(self, img1, img2):
+    @staticmethod
+    def _get_ssim_score(img1, img2):
         # Images of different shape cannot be compared with ssim and is considered to
         # have no similarity (ssim = 0)
-        return (
-            ssim(img1, img2, data_range=img1.max() - img1.min())
-            if img1.shape == img2.shape
-            else 0
-        )
+        if img1.shape != img2.shape:
+            img2 = transform.resize(img2, img1.shape, anti_aliasing=True)
+        return ssim(img1, img2, data_range=img1.max() - img1.min())
 
     def change_report(self):
         if not self.gui_change_detected():
