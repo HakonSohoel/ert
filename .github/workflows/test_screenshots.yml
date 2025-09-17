@@ -53,9 +53,6 @@ jobs:
       run: |
         export FONTCONFIG_PATH=/etc/fonts
         echo $FONTCONFIG_PATH
-        export FC_DEBUG=2
-        echo $FC_DEBUG
-        fc-list
         uv run pytest -s --junit-xml=junit.xml -o junit_family=legacy -v --durations=25 --benchmark-disable tests/ert/ui_tests/gui/test_docs_screenshots.py
 
     - name: Upload artifact images
