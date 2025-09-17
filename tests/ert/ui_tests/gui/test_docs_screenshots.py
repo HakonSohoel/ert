@@ -84,6 +84,15 @@ but qt are not able to detect these fonts for some reason.
 
 FIXED_RANDOM_SEED = 11223344
 
+COEFF_A_PNG_THRESHOLD = 0.76
+COEFF_B_PNG_THRESHOLD = 0.73
+COEFF_C_PNG_THRESHOLD = 0.76
+ERT_PNG_THRESHOLD = 0.88
+PLOT_OBS_PNG_THRESHOLD = 0.71
+PLOTS_PNG_THRESHOLD = 0.81
+POLY_PLOT_PNG_THRESHOLD = 0.71
+SIMULATIONS_PNG_THRESHOLD = 0.77
+
 
 def run_experiment(qtbot, experiment_mode, gui, click_done=True):
     # Select correct experiment in the simulation panel
@@ -243,11 +252,11 @@ def test_that_poly_new_minimal_screenshots_are_up_to_date(
         pytest.skip(SKIP_MESSAGE)
 
     gui_evaluator = GuiEvaluator(example_folder, gui, qtbot)
-    gui_evaluator.compare_img_with_gui("ert.png")
+    gui_evaluator.compare_img_with_gui("ert.png", ERT_PNG_THRESHOLD)
 
     run_experiment(qtbot, EnsembleExperiment, gui)
 
-    gui_evaluator.compare_img_with_gui("simulations.png")
+    gui_evaluator.compare_img_with_gui("simulations.png", SIMULATIONS_PNG_THRESHOLD)
 
     assert not gui_evaluator.gui_change_detected(), gui_evaluator.change_report()
 
@@ -273,7 +282,7 @@ def test_that_poly_new_with_simple_script_screenshots_are_up_to_date(
     clean_up_diplayed_runpath(gui)
 
     gui_evaluator = GuiEvaluator(example_folder, gui, qtbot)
-    gui_evaluator.compare_img_with_gui("ert.png")
+    gui_evaluator.compare_img_with_gui("ert.png", ERT_PNG_THRESHOLD)
 
     assert not gui_evaluator.gui_change_detected(), gui_evaluator.change_report()
 
@@ -308,12 +317,12 @@ def test_that_poly_new_with_results_screenshots_are_up_to_date(
         assert button_plot_tool
         qtbot.mouseClick(button_plot_tool, Qt.MouseButton.LeftButton)
 
-        gui_evaluator.compare_img_with_gui("poly_plot.png")
+        gui_evaluator.compare_img_with_gui("poly_plot.png", POLY_PLOT_PNG_THRESHOLD)
 
         data_type_widget = wait_for_child(gui, qtbot, DataTypeKeysWidget, "Data types")
         set_data_type_selection_index(data_type_widget, 1)
 
-        gui_evaluator.compare_img_with_gui("plots.png")
+        gui_evaluator.compare_img_with_gui("plots.png", PLOTS_PNG_THRESHOLD)
 
     assert not gui_evaluator.gui_change_detected(), gui_evaluator.change_report()
 
@@ -361,17 +370,17 @@ def test_that_poly_new_with_observations_screenshots_are_up_to_date(
             item.setData(Qt.ItemDataRole.CheckStateRole, True)
         ensemble_selector_widget._EnsembleSelectionWidget__dndlist.ensembleSelectionListChanged.emit()
 
-        gui_evaluator.compare_img_with_gui("plot_obs.png")
+        gui_evaluator.compare_img_with_gui("plot_obs.png", PLOT_OBS_PNG_THRESHOLD)
 
         data_type_widget = wait_for_child(gui, qtbot, DataTypeKeysWidget, "Data types")
         set_data_type_selection_index(data_type_widget, 1)
-        gui_evaluator.compare_img_with_gui("coeff_a.png")
+        gui_evaluator.compare_img_with_gui("coeff_a.png", COEFF_A_PNG_THRESHOLD)
 
         set_data_type_selection_index(data_type_widget, 2)
-        gui_evaluator.compare_img_with_gui("coeff_b.png")
+        gui_evaluator.compare_img_with_gui("coeff_b.png", COEFF_B_PNG_THRESHOLD)
 
         set_data_type_selection_index(data_type_widget, 3)
-        gui_evaluator.compare_img_with_gui("coeff_c.png")
+        gui_evaluator.compare_img_with_gui("coeff_c.png", COEFF_C_PNG_THRESHOLD)
 
     assert not gui_evaluator.gui_change_detected(), gui_evaluator.change_report()
 
@@ -423,6 +432,6 @@ def test_that_poly_new_with_more_observations_screenshots_are_up_to_date(
         data_type_widget = wait_for_child(gui, qtbot, DataTypeKeysWidget, "Data types")
         set_data_type_selection_index(data_type_widget, 2)
 
-        gui_evaluator.compare_img_with_gui("coeff_b.png")
+        gui_evaluator.compare_img_with_gui("coeff_b.png", COEFF_B_PNG_THRESHOLD)
 
     assert not gui_evaluator.gui_change_detected(), gui_evaluator.change_report()
