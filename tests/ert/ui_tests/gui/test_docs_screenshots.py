@@ -84,14 +84,14 @@ but qt are not able to detect these fonts for some reason.
 
 FIXED_RANDOM_SEED = 11223344
 
-COEFF_A_PNG_THRESHOLD = 0.76
-COEFF_B_PNG_THRESHOLD = 0.73
-COEFF_C_PNG_THRESHOLD = 0.76
-ERT_PNG_THRESHOLD = 0.88
-PLOT_OBS_PNG_THRESHOLD = 0.71
-PLOTS_PNG_THRESHOLD = 0.81
-POLY_PLOT_PNG_THRESHOLD = 0.71
-SIMULATIONS_PNG_THRESHOLD = 0.77
+COEFF_A_PNG_THRESHOLD = 0.9
+COEFF_B_PNG_THRESHOLD = 0.9
+COEFF_C_PNG_THRESHOLD = 0.9
+ERT_PNG_THRESHOLD = 0.9
+PLOT_OBS_PNG_THRESHOLD = 0.9
+PLOTS_PNG_THRESHOLD = 0.9
+POLY_PLOT_PNG_THRESHOLD = 0.9
+SIMULATIONS_PNG_THRESHOLD = 0.9
 
 
 def run_experiment(qtbot, experiment_mode, gui, click_done=True):
@@ -136,6 +136,13 @@ def run_experiment(qtbot, experiment_mode, gui, click_done=True):
         )
 
 
+def is_running_in_github_actions():
+    """
+    Checks if the current Python script is running within a GitHub Actions environment.
+    """
+    return os.getenv("CI") == "true" and os.getenv("GITHUB_ACTIONS") == "true"
+
+
 class GuiEvaluator:
     def __init__(self, source_root, example_folder, gui, qtbot) -> None:
         self.gui_changed: list[str] = []
@@ -144,27 +151,34 @@ class GuiEvaluator:
         self.gui = gui
         self.qtbot = qtbot
 
-    def compare_img_with_gui(self, name, threshold=0.99):
+    def compare_img_with_gui(self, img_name, threshold=0.99):
         temp_image_path = self.qtbot.screenshot(self.gui)
         new_img = io.imread(temp_image_path, as_gray=True)
-        current_image_path = os.path.join(self.source_root, self.example_folder, name)
-        current_img = io.imread(current_image_path, as_gray=True)
 
-        # threshold needs to be tuned. Minor changes like temp path is expected.
-        ssim_score = self._get_ssim_score(new_img, current_img)
-        if ssim_score < threshold:
-            # Keep the old and new image in temp storage for artifact upload
-            os.makedirs(self.example_folder, exist_ok=True)
-            shutil.copy(
-                current_image_path, os.path.join(self.example_folder, f"old_{name}")
-            )
-            shutil.copy(
-                temp_image_path, os.path.join(self.example_folder, f"new_{name}")
-            )
-            shutil.copy(temp_image_path, current_image_path)
-            self.gui_changed.append(
-                f"{current_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
-            )
+        name = f"ci_cmp_{img_name}" if is_running_in_github_actions() else img_name
+
+        current_image_path = os.path.join(self.source_root, self.example_folder, name)
+
+        if os.path.isfile(current_image_path):
+            current_img = io.imread(current_image_path, as_gray=True)
+
+            # threshold needs to be tuned. Minor changes like temp path is expected.
+            ssim_score = self._get_ssim_score(new_img, current_img)
+            if ssim_score < threshold:
+                # Keep the old and new image in temp storage for artifact upload
+                os.makedirs(self.example_folder, exist_ok=True)
+                shutil.copy(
+                    current_image_path,
+                    os.path.join(self.example_folder, f"old_{img_name}"),
+                )
+                shutil.copy(
+                    temp_image_path,
+                    os.path.join(self.example_folder, f"new_{img_name}"),
+                )
+                shutil.copy(temp_image_path, current_image_path)
+                self.gui_changed.append(
+                    f"{current_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
+                )
         os.remove(temp_image_path)
 
     def gui_change_detected(self):
