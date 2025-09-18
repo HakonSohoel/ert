@@ -152,10 +152,14 @@ class GuiEvaluator:
         # threshold needs to be tuned. Minor changes like temp path is expected.
         ssim_score = self._get_ssim_score(new_img, current_img)
         if ssim_score < threshold:
-            shutil.move(temp_image_path, current_image_path)
+            # Keep the new image in temp storage for artifact upload
+            shutil.copy(temp_image_path, current_image_path)
             self.gui_changed.append(
                 f"{current_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
             )
+        else:
+            # Not interesting to inspect further since similar to existing image
+            os.remove(temp_image_path)
 
     def gui_change_detected(self):
         return len(self.gui_changed) > 0
