@@ -137,29 +137,35 @@ def run_experiment(qtbot, experiment_mode, gui, click_done=True):
 
 
 class GuiEvaluator:
-    def __init__(self, example_folder, gui, qtbot) -> None:
+    def __init__(self, source_root, example_folder, gui, qtbot) -> None:
         self.gui_changed: list[str] = []
+        self.source_root = source_root
         self.example_folder = example_folder
         self.gui = gui
         self.qtbot = qtbot
 
-    def compare_img_with_gui(self, image_name, threshold=0.99):
+    def compare_img_with_gui(self, name, threshold=0.99):
         temp_image_path = self.qtbot.screenshot(self.gui)
         new_img = io.imread(temp_image_path, as_gray=True)
-        current_image_path = os.path.join(self.example_folder, image_name)
+        current_image_path = os.path.join(self.source_root, self.example_folder, name)
         current_img = io.imread(current_image_path, as_gray=True)
 
         # threshold needs to be tuned. Minor changes like temp path is expected.
         ssim_score = self._get_ssim_score(new_img, current_img)
         if ssim_score < threshold:
-            # Keep the new image in temp storage for artifact upload
+            # Keep the old and new image in temp storage for artifact upload
+            os.makedirs(self.example_folder, exist_ok=True)
+            shutil.copy(
+                current_image_path, os.path.join(self.example_folder, f"old_{name}")
+            )
+            shutil.copy(
+                temp_image_path, os.path.join(self.example_folder, f"new_{name}")
+            )
             shutil.copy(temp_image_path, current_image_path)
             self.gui_changed.append(
-                f"{temp_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
+                f"{current_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
             )
-        else:
-            # Not interesting to inspect further since similar to existing image
-            os.remove(temp_image_path)
+        os.remove(temp_image_path)
 
     def gui_change_detected(self):
         return len(self.gui_changed) > 0
@@ -209,14 +215,14 @@ def clean_up_diplayed_runpath(gui: QWidget):
     runpath_label.label.setText(label_text.replace(current_directory, "&lt;cwd&gt;"))
 
 
-def open_gui_with_docs_example(tmp_path, example_folder, config_file, random_seed=None):
+def open_gui_with_docs_example(
+    tmp_path, source_root, example_folder, config_file, random_seed=None
+):
     def ignore_pngs(src, files):
         return [f for f in files if f.endswith(".png")]
 
     shutil.copytree(
-        os.path.join(
-            example_folder,
-        ),
+        os.path.join(source_root, example_folder),
         tmp_path,
         ignore=ignore_pngs,
         dirs_exist_ok=True,
@@ -245,16 +251,13 @@ def test_that_poly_new_minimal_screenshots_are_up_to_date(
 ):
     monkeypatch.chdir(tmp_path)
 
-    example_folder = os.path.join(
-        source_root, "docs/ert/getting_started/configuration/poly_new/minimal"
-    )
-
-    gui = open_gui_with_docs_example(tmp_path, example_folder, "poly.ert")
+    example_folder = "docs/ert/getting_started/configuration/poly_new/minimal"
+    gui = open_gui_with_docs_example(tmp_path, source_root, example_folder, "poly.ert")
 
     if not gui.available_fonts:
         pytest.skip(SKIP_MESSAGE)
 
-    gui_evaluator = GuiEvaluator(example_folder, gui, qtbot)
+    gui_evaluator = GuiEvaluator(source_root, example_folder, gui, qtbot)
     gui_evaluator.compare_img_with_gui("ert.png", ERT_PNG_THRESHOLD)
 
     run_experiment(qtbot, EnsembleExperiment, gui)
@@ -272,19 +275,18 @@ def test_that_poly_new_with_simple_script_screenshots_are_up_to_date(
 ):
     monkeypatch.chdir(tmp_path)
 
-    example_folder = os.path.join(
-        source_root,
-        "docs/ert/getting_started/configuration/poly_new/with_simple_script",
+    example_folder = (
+        "docs/ert/getting_started/configuration/poly_new/with_simple_script"
     )
 
-    gui = open_gui_with_docs_example(tmp_path, example_folder, "poly.ert")
+    gui = open_gui_with_docs_example(tmp_path, source_root, example_folder, "poly.ert")
 
     if not gui.available_fonts:
         pytest.skip(SKIP_MESSAGE)
 
     clean_up_diplayed_runpath(gui)
 
-    gui_evaluator = GuiEvaluator(example_folder, gui, qtbot)
+    gui_evaluator = GuiEvaluator(source_root, example_folder, gui, qtbot)
     gui_evaluator.compare_img_with_gui("ert.png", ERT_PNG_THRESHOLD)
 
     assert not gui_evaluator.gui_change_detected(), gui_evaluator.change_report()
@@ -298,12 +300,10 @@ def test_that_poly_new_with_results_screenshots_are_up_to_date(
 ):
     monkeypatch.chdir(tmp_path)
 
-    example_folder = os.path.join(
-        source_root, "docs/ert/getting_started/configuration/poly_new/with_results"
-    )
+    example_folder = "docs/ert/getting_started/configuration/poly_new/with_results"
 
     gui = open_gui_with_docs_example(
-        tmp_path, example_folder, "poly.ert", FIXED_RANDOM_SEED
+        tmp_path, source_root, example_folder, "poly.ert", FIXED_RANDOM_SEED
     )
 
     if not gui.available_fonts:
@@ -311,7 +311,7 @@ def test_that_poly_new_with_results_screenshots_are_up_to_date(
 
     run_experiment(qtbot, EnsembleExperiment, gui)
     open_storage(gui.ert_config.ens_path, mode="w")
-    gui_evaluator = GuiEvaluator(example_folder, gui, qtbot)
+    gui_evaluator = GuiEvaluator(source_root, example_folder, gui, qtbot)
 
     with StorageService.init_service(
         project=os.path.abspath(gui.ert_config.ens_path),
@@ -338,12 +338,10 @@ def test_that_poly_new_with_observations_screenshots_are_up_to_date(
 ):
     monkeypatch.chdir(tmp_path)
 
-    example_folder = os.path.join(
-        source_root, "docs/ert/getting_started/configuration/poly_new/with_observations"
-    )
+    example_folder = "docs/ert/getting_started/configuration/poly_new/with_observations"
 
     gui = open_gui_with_docs_example(
-        tmp_path, example_folder, "poly_final.ert", FIXED_RANDOM_SEED
+        tmp_path, source_root, example_folder, "poly_final.ert", FIXED_RANDOM_SEED
     )
 
     if not gui.available_fonts:
@@ -351,7 +349,7 @@ def test_that_poly_new_with_observations_screenshots_are_up_to_date(
 
     run_experiment(qtbot, EnsembleSmoother, gui)
     open_storage(gui.ert_config.ens_path, mode="w")
-    gui_evaluator = GuiEvaluator(example_folder, gui, qtbot)
+    gui_evaluator = GuiEvaluator(source_root, example_folder, gui, qtbot)
 
     with StorageService.init_service(
         project=os.path.abspath(gui.ert_config.ens_path),
@@ -396,13 +394,12 @@ def test_that_poly_new_with_more_observations_screenshots_are_up_to_date(
 ):
     monkeypatch.chdir(tmp_path)
 
-    example_folder = os.path.join(
-        source_root,
-        "docs/ert/getting_started/configuration/poly_new/with_more_observations",
+    example_folder = (
+        "docs/ert/getting_started/configuration/poly_new/with_more_observations"
     )
 
     gui = open_gui_with_docs_example(
-        tmp_path, example_folder, "poly_final.ert", FIXED_RANDOM_SEED
+        tmp_path, source_root, example_folder, "poly_final.ert", FIXED_RANDOM_SEED
     )
 
     if not gui.available_fonts:
@@ -410,7 +407,7 @@ def test_that_poly_new_with_more_observations_screenshots_are_up_to_date(
 
     run_experiment(qtbot, EnsembleSmoother, gui)
     open_storage(gui.ert_config.ens_path, mode="w")
-    gui_evaluator = GuiEvaluator(example_folder, gui, qtbot)
+    gui_evaluator = GuiEvaluator(source_root, example_folder, gui, qtbot)
 
     with StorageService.init_service(
         project=os.path.abspath(gui.ert_config.ens_path),
