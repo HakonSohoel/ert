@@ -155,7 +155,7 @@ class GuiEvaluator:
             # Keep the new image in temp storage for artifact upload
             shutil.copy(temp_image_path, current_image_path)
             self.gui_changed.append(
-                f"{current_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
+                f"{temp_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
             )
         else:
             # Not interesting to inspect further since similar to existing image
