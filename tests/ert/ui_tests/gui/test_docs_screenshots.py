@@ -165,17 +165,22 @@ class GuiEvaluator:
             # threshold needs to be tuned. Minor changes like temp path is expected.
             ssim_score = self._get_ssim_score(new_img, current_img)
             if ssim_score < threshold:
-                # Keep the old and new image in temp storage for artifact upload
-                os.makedirs(self.example_folder, exist_ok=True)
-                shutil.copy(
-                    current_image_path,
-                    os.path.join(self.example_folder, f"old_{img_name}"),
-                )
-                shutil.copy(
-                    temp_image_path,
-                    os.path.join(self.example_folder, f"new_{img_name}"),
-                )
-                shutil.copy(temp_image_path, current_image_path)
+                if is_running_in_github_actions():
+                    # Keep the old and new image in temp storage for artifact upload
+                    tmp_img_storage = os.path.join(
+                        "/tmp/test_docs_screenshots", self.example_folder
+                    )
+                    os.makedirs(tmp_img_storage, exist_ok=True)
+                    shutil.copy(
+                        current_image_path,
+                        os.path.join(tmp_img_storage, f"old_{img_name}"),
+                    )
+                    shutil.copy(
+                        temp_image_path,
+                        os.path.join(tmp_img_storage, f"new_{img_name}"),
+                    )
+                else:
+                    shutil.copy(temp_image_path, current_image_path)
                 self.gui_changed.append(
                     f"{current_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
                 )
