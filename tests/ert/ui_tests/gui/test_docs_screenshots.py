@@ -136,11 +136,10 @@ def run_experiment(qtbot, experiment_mode, gui, click_done=True):
         )
 
 
-def is_running_in_github_actions():
-    """
-    Checks if the current Python script is running within a GitHub Actions environment.
-    """
-    return os.getenv("CI") == "true" and os.getenv("GITHUB_ACTIONS") == "true"
+# Checks if the current Python script is running within a GitHub Actions environment.
+IS_RUNNING_IN_GITHUB_ACTIONS = (
+    os.getenv("CI") == "true" and os.getenv("GITHUB_ACTIONS") == "true"
+)
 
 
 class GuiEvaluator:
@@ -155,35 +154,36 @@ class GuiEvaluator:
         temp_image_path = self.qtbot.screenshot(self.gui)
         new_img = io.imread(temp_image_path, as_gray=True)
 
-        name = f"ci_cmp_{img_name}" if is_running_in_github_actions() else img_name
+        CI_CMP_PREFIX = "ci_cmp_"
 
-        current_image_path = os.path.join(self.source_root, self.example_folder, name)
+        name = (
+            f"{CI_CMP_PREFIX}{img_name}" if IS_RUNNING_IN_GITHUB_ACTIONS else img_name
+        )
 
-        if os.path.isfile(current_image_path):
-            current_img = io.imread(current_image_path, as_gray=True)
+        image_path = os.path.join(self.example_folder, name)
+        full_image_path = os.path.join(self.source_root, image_path)
 
-            # threshold needs to be tuned. Minor changes like temp path is expected.
-            ssim_score = self._get_ssim_score(new_img, current_img)
-            if ssim_score < threshold:
-                if is_running_in_github_actions():
-                    # Keep the old and new image in temp storage for artifact upload
-                    tmp_img_storage = os.path.join(
-                        "/tmp/test_docs_screenshots", self.example_folder
-                    )
-                    os.makedirs(tmp_img_storage, exist_ok=True)
-                    shutil.copy(
-                        current_image_path,
-                        os.path.join(tmp_img_storage, f"old_{img_name}"),
-                    )
-                    shutil.copy(
-                        temp_image_path,
-                        os.path.join(tmp_img_storage, f"new_{img_name}"),
-                    )
-                else:
-                    shutil.copy(temp_image_path, current_image_path)
-                self.gui_changed.append(
-                    f"{current_image_path} SSIM:{ssim_score} < Threshold:{threshold}"
+        ssim_score = (
+            self._get_ssim_score(new_img, io.imread(full_image_path, as_gray=True))
+            if os.path.isfile(full_image_path)
+            else 0
+        )
+        if ssim_score < threshold:
+            if IS_RUNNING_IN_GITHUB_ACTIONS:
+                # Copy the new image in temp storage for artifact upload
+                tmp_img_storage = os.path.join(
+                    "/tmp/test_docs_screenshots", self.example_folder
                 )
+                os.makedirs(tmp_img_storage, exist_ok=True)
+                shutil.copy(
+                    temp_image_path,
+                    os.path.join(tmp_img_storage, f"{name}"),
+                )
+            else:
+                shutil.copy(temp_image_path, full_image_path)
+            self.gui_changed.append(
+                f"{image_path} SSIM:{ssim_score} < Threshold:{threshold}"
+            )
         os.remove(temp_image_path)
 
     def gui_change_detected(self):
@@ -206,7 +206,11 @@ class GuiEvaluator:
 
             The image(s):
             - {newline.join(self.gui_changed)}
-            has been overwritten with the new version.
+            {
+                "has been added to the test-images artifact."
+                if IS_RUNNING_IN_GITHUB_ACTIONS
+                else "has been overwritten with the new version."
+            }
             If the new and old image looks the same and both are correct, the test might
             simply need to lower the similarity threshold.
 

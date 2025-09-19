@@ -64,7 +64,7 @@ jobs:
         name: test-images-${{ github.run_number }}-${{ github.run_id }}-${{ inputs.python-version }}
         path: |
           /tmp/tmp*/**/*.png
-          /tmp/pytest-of-runner/**/*.png
+          /tmp/test_docs_screenshots/**/*.png
 
     - name: CLI Test
       if: inputs.test-type == 'cli-tests'
