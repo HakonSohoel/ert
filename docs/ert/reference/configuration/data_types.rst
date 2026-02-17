@@ -519,6 +519,30 @@ For loading multiple RFT observations from a CSV file, see the
 :ref:`RFT_OBSERVATION <rft_observation>` documentation.
 
 
+Exporting RFT data for visualization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The `EXPORT_RFT <../workflows/added_workflow_jobs.html#EXPORT_RFT>`_ workflow job exports RFT observations and simulated
+responses to CSV files compatible with the webviz-subsurface RftPlotter plugin.
+This workflow job is a replacement for the `MERGE_RFT_ERTOBS` forward model when
+using :ref:`RFT_OBSERVATION <rft_observation>` instead of the legacy `GENDATA_RFT` method.
+
+To use it, create a workflow file e.g. ``export_rft_data`` with content::
+
+   EXPORT_RFT
+
+Then add the workflow to your ERT configuration::
+
+   LOAD_WORKFLOW export_rft_data
+   HOOK_WORKFLOW export_rft_data POST_SIMULATION
+
+By default, the output file is written to
+``share/results/tables/rft_ert.csv`` in each realization's runpath.
+A custom filename can be specified as a parameter::
+
+   EXPORT_RFT custom_rft.csv
+
+
 General data: ``GEN_DATA``
 --------------------------
 

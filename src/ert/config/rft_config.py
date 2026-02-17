@@ -273,6 +273,8 @@ class RFTConfig(ResponseConfig):
             return pl.DataFrame(
                 {
                     "response_key": [],
+                    "well_and_date": [],
+                    "property": [],
                     "time": [],
                     "depth": [],
                     "values": [],
@@ -292,6 +294,8 @@ class RFTConfig(ResponseConfig):
                     pl.DataFrame(
                         {
                             "response_key": [f"{well}:{time.isoformat()}:{prop}"],
+                            "well_and_date": [f"{well}:{time.isoformat()}"],
+                            "property": [prop],
                             "time": [time],
                             "depth": [fetched[well, time]["DEPTH"]],
                             "values": [vals],
