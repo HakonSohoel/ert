@@ -483,6 +483,7 @@ def workflows_from_dict(
     content_dict: ConfigDict,
     substitutions: dict[str, str],
     site_installed_workflows_jobs: Mapping[str, WorkflowJob] | None = None,
+    site_installed_workflow_files: Mapping[str, str] | None = None,
 ) -> tuple[
     dict[str, WorkflowJob],
     dict[str, Workflow],
@@ -494,9 +495,16 @@ def workflows_from_dict(
         if site_installed_workflows_jobs
         else {},
     )
+    plugin_workflow_info: list[tuple[str, str]] = [
+        (filepath, name)
+        for name, filepath in (site_installed_workflow_files or {}).items()
+    ]
+    user_workflow_info: list[tuple[str, str]] = content_dict.get(
+        ConfigKeys.LOAD_WORKFLOW, []
+    )
     workflows, hooked_workflows = create_and_hook_workflows(
         content_dict.get(ConfigKeys.HOOK_WORKFLOW, []),
-        content_dict.get(ConfigKeys.LOAD_WORKFLOW, []),
+        plugin_workflow_info + user_workflow_info,
         workflow_jobs,
         substitutions,
     )
@@ -685,6 +693,7 @@ class ErtConfig(BaseModel):
     DEFAULT_RUNPATH_FILE: ClassVar[str] = ".ert_runpath_list"
     PREINSTALLED_FORWARD_MODEL_STEPS: ClassVar[Mapping[str, ForwardModelStep]] = {}
     PREINSTALLED_WORKFLOWS: ClassVar[dict[str, WorkflowJob]] = {}
+    PREINSTALLED_WORKFLOW_FILES: ClassVar[dict[str, str]] = {}
     ENV_PR_FM_STEP: ClassVar[dict[str, dict[str, Any]]] = {}
     ENV_VARIABLES: ClassVar[dict[str, str]] = {}
     QUEUE_OPTIONS: ClassVar[KnownQueueOptions | None] = None
@@ -814,6 +823,7 @@ class ErtConfig(BaseModel):
                 Mapping[str, SiteInstalledForwardModelStep]
             ] = runtime_plugins.installed_forward_model_steps
             PREINSTALLED_WORKFLOWS = dict(runtime_plugins.installed_workflow_jobs)
+            PREINSTALLED_WORKFLOW_FILES = dict(runtime_plugins.installed_workflows)
             ENV_PR_FM_STEP: ClassVar[dict[str, dict[str, Any]]] = (
                 uppercase_subkeys_and_stringify_subvalues(
                     {k: dict(v) for k, v in runtime_plugins.env_pr_fm_step.items()}
@@ -915,7 +925,10 @@ class ErtConfig(BaseModel):
 
         try:
             workflow_jobs, workflows, hooked_workflows = workflows_from_dict(
-                config_dict, substitutions, cls.PREINSTALLED_WORKFLOWS
+                config_dict,
+                substitutions,
+                cls.PREINSTALLED_WORKFLOWS,
+                cls.PREINSTALLED_WORKFLOW_FILES,
             )
         except ConfigValidationError as e:
             errors.append(e)

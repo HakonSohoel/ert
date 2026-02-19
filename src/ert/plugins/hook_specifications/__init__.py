@@ -6,6 +6,7 @@ from .help_resources import help_links
 from .jobs import (
     ertscript_workflow,
     installable_workflow_jobs,
+    installable_workflows,
     job_documentation,
     legacy_ertscript_workflow,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "help_links",
     "installable_forward_model_steps",
     "installable_workflow_jobs",
+    "installable_workflows",
     "job_documentation",
     "legacy_ertscript_workflow",
     "site_configurations",

@@ -189,6 +189,9 @@ class ErtPluginManager(pluggy.PluginManager):
         config_workflow_jobs = self._get_config_workflow_jobs()
         return config_workflow_jobs
 
+    def get_installable_workflows(self) -> dict[str, str]:
+        return ErtPluginManager._merge_dicts(self.hook.installable_workflows())
+
     @staticmethod
     def _merge_internal_jobs(
         config_jobs: dict[str, str],
@@ -344,6 +347,7 @@ class ErtRuntimePlugins(BaseModel):
         default_factory=dict
     )
     installed_workflow_jobs: Mapping[str, WorkflowJob] = Field(default_factory=dict)
+    installed_workflows: Mapping[str, str] = Field(default_factory=dict)
     queue_options: KnownQueueOptions | None = Field(
         default_factory=LocalQueueOptions, discriminator="name"
     )
@@ -360,6 +364,7 @@ def get_site_plugins(
 
     site_configurations = plugin_manager.get_site_configurations()
     installable_workflow_jobs = plugin_manager.get_installable_workflow_jobs()
+    installable_workflows = plugin_manager.get_installable_workflows()
 
     all_forward_model_steps = (
         dict(site_configurations.installed_forward_model_steps)
@@ -388,6 +393,7 @@ def get_site_plugins(
     runtime_plugins = ErtRuntimePlugins(
         installed_forward_model_steps=all_forward_model_steps,
         installed_workflow_jobs=all_workflow_jobs,
+        installed_workflows=installable_workflows,
         queue_options=site_configurations.queue_options
         if site_configurations
         else None,

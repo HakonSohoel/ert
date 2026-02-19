@@ -31,3 +31,14 @@ def installable_workflow_jobs() -> dict[str, str]:
         "{{ERT_SHARE_PATH}}/workflows/jobs/shell",
     ]
     return _get_jobs_from_directories(directories)
+
+
+@ert.plugin(name="ert")
+def installable_workflows() -> dict[str, str]:
+    share_path = ert_share_path()
+    workflow_dir = os.path.join(share_path, "workflows")
+    return {
+        name: os.path.join(workflow_dir, name)
+        for name in os.listdir(workflow_dir)
+        if os.path.isfile(os.path.join(workflow_dir, name))
+    }

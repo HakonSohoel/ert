@@ -37,6 +37,16 @@ def installable_workflow_jobs() -> PluginResponse[dict[str, str]]:
 
 @no_type_check
 @hook_specification
+def installable_workflows() -> PluginResponse[dict[str, str]]:
+    """
+    :return: dict with workflow names as keys and path to workflow files as values.
+        These workflows are automatically available without the user needing
+        to create workflow files or use LOAD_WORKFLOW.
+    """
+
+
+@no_type_check
+@hook_specification
 def ertscript_workflow(config: WorkflowConfigs) -> None:
     """
     This hook allows the user to register a workflow with the config object. A workflow
