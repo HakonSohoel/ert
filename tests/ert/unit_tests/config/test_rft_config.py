@@ -1239,3 +1239,52 @@ def test_that_nan_rft_values_from_opm_flow_are_preserved_in_response_dataframe(
     swat = df.filter(pl.col("property") == "SWAT")
     assert len(swat) == 1
     assert not np.isnan(swat["values"].to_list()[0])
+
+
+@pytest.mark.integration_test
+@pytest.mark.skipif(not shutil.which("flow"), reason="OPM Flow not available")
+def test_that_inactive_cell_connection_is_excluded_from_opm_flow_rft(
+    source_root, tmp_path
+):
+    """Run OPM Flow on a deck where a well has completions in an active cell
+    (1,1,1) and an inactive cell (1,1,2) with ACTNUM=0.
+
+    OPM Flow drops connections in inactive cells during initialization, so the
+    RFT file should only contain data for the active connection.  This verifies
+    that ERT correctly reads the reduced connection set.
+    """
+    shutil.copy(
+        source_root / "test-data/ert/eclipse/EIGHTCELLS_INACTIVE_CELL.DATA",
+        tmp_path / "EIGHTCELLS_INACTIVE_CELL.DATA",
+    )
+    subprocess.run(
+        [
+            "flow",
+            "EIGHTCELLS_INACTIVE_CELL.DATA",
+            "--output-dir=" + str(tmp_path),
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    rft_path = tmp_path / "EIGHTCELLS_INACTIVE_CELL.RFT"
+    assert rft_path.exists(), "OPM Flow did not produce an RFT file"
+
+    rft_config = RFTConfig(
+        input_files=["EIGHTCELLS_INACTIVE_CELL.RFT"],
+        data_to_read={"*": {"*": ["PRESSURE", "SWAT"]}},
+    )
+    df = rft_config.read_from_file(str(tmp_path), 0, 0)
+
+    # Only the active cell (1,1,1) should appear — the inactive cell (1,1,2)
+    # is dropped by OPM Flow and absent from the RFT file entirely
+    pressure = df.filter(pl.col("property") == "PRESSURE")
+    assert len(pressure) == 1
+    assert pressure["i"].to_list() == [1]
+    assert pressure["j"].to_list() == [1]
+    assert pressure["k"].to_list() == [1]
+    assert not np.isnan(pressure["values"].to_list()[0])
+
+    swat = df.filter(pl.col("property") == "SWAT")
+    assert len(swat) == 1
+    assert not np.isnan(swat["values"].to_list()[0])
