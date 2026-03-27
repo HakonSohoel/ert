@@ -1,10 +1,10 @@
 OPM NaN Values
 
-Within a one the pressure is continuous
+Within a zone the pressure is continuous
 
-Search ellipsoid around inactive cell
+One approach: Search ellipsoid around inactive cell
 
-Interpolate along the well. But not across zone borders.
+Another approach: Interpolate along the well. But not across zone borders.
 Then better to extrapolate with a warning.
 
-Option to either lose realization (or date point)
+Option to either lose realization (or data point)
