@@ -1192,57 +1192,6 @@ def test_that_nan_rft_values_are_preserved_in_response_dataframe(mock_resfo_file
 
 @pytest.mark.integration_test
 @pytest.mark.skipif(not shutil.which("flow"), reason="OPM Flow not available")
-def test_that_nan_rft_values_from_opm_flow_are_preserved_in_response_dataframe(
-    source_root, tmp_path
-):
-    """Run OPM Flow to produce a real RFT file, inject NaN values into it,
-    and verify that RFTConfig.read_from_file propagates them correctly.
-
-    OPM Flow can write NaN cell_pressure or cell_saturation when a well
-    connection cell has numerical convergence issues.  This test uses a real
-    OPM-produced binary to ensure format compatibility, then injects NaN to
-    simulate the convergence-failure scenario.
-    """
-    shutil.copy(
-        source_root / "test-data/ert/eclipse/EIGHTCELLS.DATA",
-        tmp_path / "EIGHTCELLS.DATA",
-    )
-    subprocess.run(
-        ["flow", "EIGHTCELLS.DATA", "--output-dir=" + str(tmp_path)],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-    )
-    rft_path = tmp_path / "EIGHTCELLS.RFT"
-    assert rft_path.exists(), "OPM Flow did not produce an RFT file"
-
-    # Read, inject NaN into PRESSURE, and write back
-    records = resfo.read(str(rft_path))
-    modified = []
-    for kw, vals in records:
-        if kw.strip() == "PRESSURE" and vals.dtype.kind == "f":
-            vals = vals.copy()
-            vals[0] = np.float32("nan")
-        modified.append((kw, vals))
-    resfo.write(str(rft_path), modified)
-
-    rft_config = RFTConfig(
-        input_files=["EIGHTCELLS.RFT"],
-        data_to_read={"*": {"*": ["PRESSURE", "SWAT"]}},
-    )
-    df = rft_config.read_from_file(str(tmp_path), 0, 0)
-
-    pressure = df.filter(pl.col("property") == "PRESSURE")
-    assert len(pressure) == 1
-    assert np.isnan(pressure["values"].to_list()[0])
-
-    swat = df.filter(pl.col("property") == "SWAT")
-    assert len(swat) == 1
-    assert not np.isnan(swat["values"].to_list()[0])
-
-
-@pytest.mark.integration_test
-@pytest.mark.skipif(not shutil.which("flow"), reason="OPM Flow not available")
 def test_that_inactive_cell_connection_is_excluded_from_opm_flow_rft(
     source_root, tmp_path
 ):
