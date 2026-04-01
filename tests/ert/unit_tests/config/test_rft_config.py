@@ -1203,24 +1203,23 @@ def test_that_inactive_cell_connection_is_excluded_from_opm_flow_rft(
     that ERT correctly reads the reduced connection set.
     """
     shutil.copy(
-        source_root / "test-data/ert/eclipse/EIGHTCELLS_INACTIVE_CELL.DATA",
-        tmp_path / "EIGHTCELLS_INACTIVE_CELL.DATA",
+        source_root / "test-data/ert/eclipse/INACTIVE_CELL_WITH_WELL_CONNECTION.DATA",
+        tmp_path / "INACTIVE_CELL_WITH_WELL_CONNECTION.DATA",
     )
     subprocess.run(
         [
             "flow",
-            "EIGHTCELLS_INACTIVE_CELL.DATA",
-            "--output-dir=" + str(tmp_path),
+            "INACTIVE_CELL_WITH_WELL_CONNECTION.DATA",
         ],
         cwd=tmp_path,
         check=True,
         capture_output=True,
     )
-    rft_path = tmp_path / "EIGHTCELLS_INACTIVE_CELL.RFT"
+    rft_path = tmp_path / "INACTIVE_CELL_WITH_WELL_CONNECTION.RFT"
     assert rft_path.exists(), "OPM Flow did not produce an RFT file"
 
     rft_config = RFTConfig(
-        input_files=["EIGHTCELLS_INACTIVE_CELL.RFT"],
+        input_files=["INACTIVE_CELL_WITH_WELL_CONNECTION.RFT"],
         data_to_read={"*": {"*": ["PRESSURE", "SWAT"]}},
     )
     df = rft_config.read_from_file(str(tmp_path), 0, 0)
@@ -1228,12 +1227,12 @@ def test_that_inactive_cell_connection_is_excluded_from_opm_flow_rft(
     # Only the active cell (1,1,1) should appear — the inactive cell (1,1,2)
     # is dropped by OPM Flow and absent from the RFT file entirely
     pressure = df.filter(pl.col("property") == "PRESSURE")
-    assert len(pressure) == 1
-    assert pressure["i"].to_list() == [1]
-    assert pressure["j"].to_list() == [1]
-    assert pressure["k"].to_list() == [1]
+    assert len(pressure) == 2
+    assert pressure["i"].to_list() == [1, 3]
+    assert pressure["j"].to_list() == [1, 1]
+    assert pressure["k"].to_list() == [1, 1]
     assert not np.isnan(pressure["values"].to_list()[0])
 
     swat = df.filter(pl.col("property") == "SWAT")
-    assert len(swat) == 1
+    assert len(swat) == 2
     assert not np.isnan(swat["values"].to_list()[0])

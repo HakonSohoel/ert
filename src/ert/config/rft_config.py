@@ -405,6 +405,71 @@ class RFTConfig(ResponseConfig):
             how="left",
         )
 
+        locations_with_missing_response = location_metadata.join(
+            result,
+            left_on="actual_cell",
+            right_on="well_connection_cell",
+            how="anti",
+        )
+
+        # Interpolate/extrapolate values for observation locations whose
+        # grid cell did not match any well connection (e.g. inactive cells).
+        # Projects the missing point onto the line through the two nearest
+        # matched observation locations, enabling both interpolation (when
+        # between them) and extrapolation (when outside them).
+        matched = result.filter(pl.col("location").is_not_null())
+        if not locations_with_missing_response.is_empty() and len(matched) >= 2:
+            interpolated_rows: list[dict[str, Any]] = []
+            response_keys = matched["response_key"].unique().to_list()
+
+            for missing in locations_with_missing_response.iter_rows(named=True):
+                missing_loc = np.array(missing["location"], dtype=np.float32)
+
+                for rk in response_keys:
+                    subset = matched.filter(pl.col("response_key") == rk)
+                    if len(subset) < 2:
+                        continue
+
+                    locs = np.array(subset["location"].to_list(), dtype=np.float32)
+                    dists = np.linalg.norm(locs - missing_loc, axis=1)
+                    nearest = np.argsort(dists)[:2]
+
+                    loc0 = locs[nearest[0]]
+                    loc1 = locs[nearest[1]]
+                    seg = loc1 - loc0
+                    seg_len_sq = float(np.dot(seg, seg))
+
+                    if seg_len_sq > 0:
+                        t = float(np.dot(missing_loc - loc0, seg)) / seg_len_sq
+                    else:
+                        t = 0.5
+
+                    v0 = float(subset["values"][int(nearest[0])])
+                    v1 = float(subset["values"][int(nearest[1])])
+                    dep0 = float(subset["depth"][int(nearest[0])])
+                    dep1 = float(subset["depth"][int(nearest[1])])
+
+                    template = subset.row(int(nearest[0]), named=True)
+                    interpolated_rows.append(
+                        {
+                            **template,
+                            "values": np.float32(v0 + t * (v1 - v0)),
+                            "depth": np.float32(dep0 + t * (dep1 - dep0)),
+                            "location": missing["location"],
+                            "expected_zone": missing["expected_zone"],
+                            "actual_zones": missing["actual_zones"],
+                            "well_connection_cell": missing["actual_cell"],
+                        }
+                    )
+
+            if interpolated_rows:
+                result = pl.concat(
+                    [
+                        result,
+                        pl.DataFrame(interpolated_rows, schema=result.schema),
+                    ]
+                )
+
         is_zone_valid = pl.col("expected_zone").is_null() | pl.col(
             "expected_zone"
         ).is_in(pl.col("actual_zones"))

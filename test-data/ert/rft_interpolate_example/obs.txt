@@ -2,9 +2,9 @@ RFT_OBSERVATION rft_obs_1 {
     WELL=OP1;
     DATE=2000-01-01;
     PROPERTY=PRESSURE;
-    VALUE=3800;
+    VALUE=80;
     ERROR=10;
-    TVD=25;
+    TVD=20;
     EAST=25;
     NORTH=25;
 };
@@ -13,7 +13,7 @@ RFT_OBSERVATION rft_obs_2 {
     WELL=OP1;
     DATE=2000-01-01;
     PROPERTY=PRESSURE;
-    VALUE=3800;
+    VALUE=100;
     ERROR=10;
     TVD=25;
     EAST=75;
@@ -25,9 +25,9 @@ RFT_OBSERVATION rft_obs_3 {
     WELL=OP1;
     DATE=2000-01-01;
     PROPERTY=PRESSURE;
-    VALUE=3800;
+    VALUE=120;
     ERROR=10;
-    TVD=25;
+    TVD=30;
     EAST=125;
     NORTH=25;
 };
