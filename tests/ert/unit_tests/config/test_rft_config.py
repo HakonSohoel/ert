@@ -18,6 +18,7 @@ from ert.config._create_observation_dataframes import (
 )
 from ert.config._observations import RFTObservation
 from ert.config.parsing import ConfigValidationError, ObservationType
+from ert.config.rft_config import ZonedPoint
 from ert.warnings import PostExperimentWarning
 from tests.ert.rft_generator import cell_start, float_arr
 
@@ -378,7 +379,7 @@ def test_that_locations_are_found_in_corresponding_grid_and_added_to_response_da
     rft_config = RFTConfig(
         input_files=["BASE.RFT"],
         data_to_read={"*": {"*": ["*"]}},
-        locations=[(1.0, 1.0, 1.0)],
+        locations=[ZonedPoint((1.0, 1.0, 1.0))],
     )
     data = rft_config.read_from_file("/tmp/does_not_exist", 1, 1)
     assert data["response_key"].to_list() == [
@@ -407,7 +408,7 @@ def test_that_multiple_locations_in_the_same_cell_creates_multiple_rows(
     rft_config = RFTConfig(
         input_files=["BASE.RFT"],
         data_to_read={"*": {"*": ["*"]}},
-        locations=[(1.25, 1.25, 1.25), (1.5, 1.5, 1.5)],
+        locations=[ZonedPoint((1.25, 1.25, 1.25)), ZonedPoint((1.5, 1.5, 1.5))],
     )
     data = rft_config.read_from_file("/tmp/does_not_exist", 1, 1)
     assert data["response_key"].to_list() == [
@@ -519,7 +520,7 @@ def test_that_handle_rft_observations_adds_defaulted_radius_column_to_dataframe(
     rft_config = RFTConfig(
         input_files=["BASE.RFT"],
         data_to_read={"*": {"*": ["*"]}},
-        locations=[(1.0, 1.0, 1.0), (2.0, 2.0, 2.0)],
+        locations=[ZonedPoint((1.0, 1.0, 1.0)), ZonedPoint((2.0, 2.0, 2.0))],
     )
     rft_observation = RFTObservation(
         name="NAME[0]",
@@ -544,7 +545,7 @@ def test_that_handle_rft_observations_prioritize_provided_radius_over_default():
     rft_config = RFTConfig(
         input_files=["BASE.RFT"],
         data_to_read={"*": {"*": ["*"]}},
-        locations=[(1.0, 1.0, 1.0), (2.0, 2.0, 2.0)],
+        locations=[ZonedPoint((1.0, 1.0, 1.0)), ZonedPoint((2.0, 2.0, 2.0))],
     )
     rft_observation = RFTObservation(
         name="NAME[0]",
@@ -984,7 +985,7 @@ def test_that_missing_egrid_with_locations_raises_invalid_response_file(
     rft_config = RFTConfig(
         input_files=["BASE.RFT"],
         data_to_read={"*": {"*": ["PRESSURE"]}},
-        locations=[(1.0, 1.0, 1.0)],
+        locations=[ZonedPoint((1.0, 1.0, 1.0))],
     )
 
     with pytest.raises(InvalidResponseFile):
