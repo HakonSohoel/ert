@@ -31,7 +31,7 @@ from ert.config.parsing.observations_parser import (
     ObservationConfigError,
     ObservationType,
 )
-from ert.config.rft_config import RFTConfig, ZonedPoint
+from ert.config.rft_config import RFTConfig, WellpathLocation
 from ert.gui.tools.plot.plottery import PlotConfig
 from ert.gui.tools.plot.plottery.plots.observations import _plotObservations
 from ert.namespace import Namespace
@@ -345,7 +345,7 @@ def test_that_rft_config_is_created_from_observations():
         ),
     )
     assert rft_config.data_to_read == {"well": {"2013-03-31": ["PRESSURE"]}}
-    assert rft_config.locations == [ZonedPoint((30.0, 71.0, 2000.0))]
+    assert rft_config.locations == [WellpathLocation((30.0, 71.0, 2000.0))]
 
 
 @pytest.mark.usefixtures("use_tmpdir")

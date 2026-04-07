@@ -18,7 +18,7 @@ from .parsing import (
     ErrorInfo,
     ObservationConfigError,
 )
-from .rft_config import RFTConfig, ZonedPoint
+from .rft_config import RFTConfig, WellpathLocation
 
 DEFAULT_LOCALIZATION_RADIUS = 2000
 
@@ -147,9 +147,10 @@ def _handle_rft_observation(
     rft_config: RFTConfig,
     rft_observation: RFTObservation,
 ) -> pl.DataFrame:
-    location = ZonedPoint(
+    location = WellpathLocation(
         (rft_observation.east, rft_observation.north, rft_observation.tvd),
         rft_observation.zone,
+        rft_observation.md,
     )
     localization_radius = rft_observation.radius
 

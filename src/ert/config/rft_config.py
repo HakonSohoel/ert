@@ -49,11 +49,18 @@ RFTProperty: TypeAlias = str
 
 
 @dataclass(frozen=True)
-class ZonedPoint:
-    """A point optionally constrained to be in a given zone."""
+class WellpathLocation:
+    """A point along a wellpath with optional zone and measured depth.
+
+    Attributes:
+        point: UTM/TVD coordinates (east, north, tvd).
+        zone_name: Expected zone the point should belong to.
+        md: Measured depth along the well path.
+    """
 
     point: tuple[float | None, float | None, float | None] = (None, None, None)
     zone_name: ZoneName | None = None
+    md: float | None = None
 
 
 class RFTConfig(ResponseConfig):
@@ -79,7 +86,7 @@ class RFTConfig(ResponseConfig):
     data_to_read: dict[WellName, dict[DateString, list[RFTProperty]]] = Field(
         default_factory=dict
     )
-    locations: list[ZonedPoint] = Field(default_factory=list)
+    locations: list[WellpathLocation] = Field(default_factory=list)
     zonemap: Path | None = None
 
     @property
@@ -123,13 +130,14 @@ class RFTConfig(ResponseConfig):
 
     @staticmethod
     def _map_locations_to_cells(
-        egrid_file: str | os.PathLike[str] | IO[Any], zoned_locations: list[ZonedPoint]
-    ) -> dict[ZonedPoint, GridIndex]:
+        egrid_file: str | os.PathLike[str] | IO[Any],
+        zoned_locations: list[WellpathLocation],
+    ) -> dict[WellpathLocation, GridIndex]:
         """
         For each location, find the corresponding connected grid cell, if it exists.
         """
 
-        location_cell_map: dict[ZonedPoint, GridIndex] = {}
+        location_cell_map: dict[WellpathLocation, GridIndex] = {}
         if not zoned_locations:
             return location_cell_map
         try:
