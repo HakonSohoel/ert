@@ -55,9 +55,6 @@ class ZonedPoint:
     point: tuple[float | None, float | None, float | None] = (None, None, None)
     zone_name: ZoneName | None = None
 
-    def has_zone(self) -> bool:
-        return self.zone_name is not None
-
 
 class RFTConfig(ResponseConfig):
     """:term:`RFT` response from a :term:`reservoir simulator`.
