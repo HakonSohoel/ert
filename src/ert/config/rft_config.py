@@ -336,8 +336,11 @@ class RFTConfig(ResponseConfig):
         combined = self._combine_response_and_location_metadata(
             df, location_metadata, iens, iter_
         )
+        with_interpolated = self._interpolate_rft_values(
+            combined, location_metadata, iens, iter_
+        )
 
-        return combined.pipe(self._assert_schema, schema)
+        return combined.drop("measured_depth").pipe(self._assert_schema, schema)
 
     def _obtain_location_metadata(
         self,
@@ -384,8 +387,161 @@ class RFTConfig(ResponseConfig):
                     [location_cell_map[loc] for loc in self.locations],
                     dtype=pl.Array(pl.Int64, 3),
                 ),
+                "measured_depth": pl.Series(
+                    [loc.md for loc in self.locations], dtype=pl.Float32
+                ),
             }
         )
+
+    @staticmethod
+    def _interpolate_rft_values(
+        responses: pl.DataFrame,
+        location_metadata: pl.DataFrame,
+        iens: int,
+        iter_: int,
+    ) -> pl.DataFrame:
+        locations_with_missing_response = location_metadata.with_columns(
+            pl.col("actual_cell").arr.get(0).alias("i"),
+            pl.col("actual_cell").arr.get(1).alias("j"),
+            pl.col("actual_cell").arr.get(2).alias("k"),
+        ).join(
+            responses,
+            left_on=["i", "j", "k"],
+            right_on=["i", "j", "k"],
+            how="anti",
+        )
+
+        # Interpolate/extrapolate values for observation locations whose
+        # grid cell did not match any well connection (e.g. inactive cells).
+        # Projects the missing point onto the line through the two nearest
+        # matched observation locations, enabling both interpolation (when
+        # between them) and extrapolation (when outside them).
+        matched_on_md = responses.filter(pl.col("measured_depth").is_not_null())
+        if not locations_with_missing_response.is_empty():
+            interpolated_rows: list[dict[str, Any]] = []
+            response_keys = responses["response_key"].unique().to_list()
+
+            for missing in locations_with_missing_response.iter_rows(named=True):
+                missing_loc = np.array(missing["location"], dtype=np.float32)
+                missing_md = missing["measured_depth"]
+                zone_filter = (
+                    pl.col("zone").is_null()
+                    | (pl.col("zone") == missing["expected_zone"])
+                    if missing["expected_zone"] is None
+                    else pl.col("zone") == missing["expected_zone"]
+                )
+                candidate_points_md = matched_on_md.filter(zone_filter)
+                candidate_points_location = responses.filter(zone_filter)
+
+                for rk in response_keys:
+                    subset_md = candidate_points_md.filter(pl.col("response_key") == rk)
+                    subset_location = candidate_points_location.filter(
+                        pl.col("response_key") == rk
+                    )
+                    if len(subset_md) >= 2:
+                        # find the first point before and after the missing md
+                        before = subset_md.filter(
+                            pl.col("measured_depth") <= missing_md
+                        )
+                        after = subset_md.filter(pl.col("measured_depth") >= missing_md)
+                        if not before.is_empty() and not after.is_empty():
+                            before_closest = before.sort(
+                                "measured_depth", descending=True
+                            )[0]
+                            after_closest = after.sort("measured_depth")[0]
+
+                            v0 = float(before_closest["values"][0])
+                            v1 = float(after_closest["values"][0])
+                            md0 = float(before_closest["measured_depth"][0])
+                            md1 = float(after_closest["measured_depth"][0])
+
+                            if md1 > md0:
+                                t = (missing_md - md0) / (md1 - md0)
+                            else:
+                                t = 0.5
+
+                            template = before_closest.row(0, named=True)
+                            interpolated_rows.append(
+                                {
+                                    **template,
+                                    "depth": missing["location"].arr.get(2),
+                                    "values": np.float32(v0 + t * (v1 - v0)),
+                                    "measured_depth": missing_md,
+                                    "east": missing["location"].arr.get(0),
+                                    "north": missing["location"].arr.get(1),
+                                    "tvd": missing["location"].arr.get(2),
+                                    "i": missing["actual_cell"].arr.get(0),
+                                    "j": missing["actual_cell"].arr.get(1),
+                                    "k": missing["actual_cell"].arr.get(2),
+                                }
+                            )
+                    elif len(subset_location) >= 2:
+                        # Find the two closest points in euclidean distance
+                        # where the missing point's projection onto the line
+                        # between them falls between them (t in [0, 1]).
+                        locs = np.array(
+                            subset_location["location"].to_list(), dtype=np.float32
+                        )
+                        dists = np.linalg.norm(locs - missing_loc, axis=1)
+                        order = np.argsort(dists)
+
+                        best_pair = None
+                        for a_idx in range(len(order)):
+                            for b_idx in range(a_idx + 1, len(order)):
+                                ia, ib = int(order[a_idx]), int(order[b_idx])
+                                seg = locs[ib] - locs[ia]
+                                seg_len_sq = float(np.dot(seg, seg))
+                                if seg_len_sq > 0:
+                                    t = (
+                                        float(np.dot(missing_loc - locs[ia], seg))
+                                        / seg_len_sq
+                                    )
+                                    if 0.0 <= t <= 1.0:
+                                        best_pair = (ia, ib, t)
+                                        break
+                            if best_pair is not None:
+                                break
+
+                        if best_pair is None:
+                            # Fall back to two nearest points
+                            ia, ib = int(order[0]), int(order[1])
+                            seg = locs[ib] - locs[ia]
+                            seg_len_sq = float(np.dot(seg, seg))
+                            t = (
+                                float(np.dot(missing_loc - locs[ia], seg)) / seg_len_sq
+                                if seg_len_sq > 0
+                                else 0.5
+                            )
+                            best_pair = (ia, ib, t)
+
+                        ia, ib, t = best_pair
+                        v0 = float(subset_location["values"][ia])
+                        v1 = float(subset_location["values"][ib])
+                        dep0 = float(subset_location["depth"][ia])
+                        dep1 = float(subset_location["depth"][ib])
+
+                        template = subset_location.row(ia, named=True)
+                        interpolated_rows.append(
+                            {
+                                **template,
+                                "values": np.float32(v0 + t * (v1 - v0)),
+                                "depth": np.float32(dep0 + t * (dep1 - dep0)),
+                                "east": missing["location"][0],
+                                "north": missing["location"][1],
+                                "tvd": missing["location"][2],
+                                "i": missing["actual_cell"][0],
+                                "j": missing["actual_cell"][1],
+                                "k": missing["actual_cell"][2],
+                            }
+                        )
+
+            if interpolated_rows:
+                result = pl.concat(
+                    [
+                        result,
+                        pl.DataFrame(interpolated_rows, schema=result.schema),
+                    ]
+                )
 
     @staticmethod
     def _combine_response_and_location_metadata(
@@ -438,7 +594,14 @@ class RFTConfig(ResponseConfig):
                 pl.col("well_connection_cell").arr.get(1).alias("j"),
                 pl.col("well_connection_cell").arr.get(2).alias("k"),
             ]
-        ).drop(["location", "well_connection_cell", "expected_zone", "actual_zones"])
+        ).drop(
+            [
+                "location",
+                "well_connection_cell",
+                "expected_zone",
+                "actual_zones",
+            ]
+        )
 
     @property
     def response_type(self) -> str:

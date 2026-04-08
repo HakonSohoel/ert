@@ -1154,3 +1154,47 @@ def test_that_specific_well_with_wildcard_property_reads_all_float_arrays(
             "WELL:2000-01-01:SGAS",
         ]
     )
+
+
+def test_that_rft_values_are_interpolated_when_option_is_enabled(
+    mock_resfo_file, egrid
+):
+    mock_resfo_file(
+        "/tmp/does_not_exist/BASE.EGRID",
+        egrid,
+    )
+
+    mock_resfo_file(
+        "/tmp/does_not_exist/BASE.RFT",
+        [
+            *cell_start(
+                date=(1, 1, 2000), well_name="WELL", ijks=((1, 1, 1), (1, 1, 3))
+            ),
+            ("PRESSURE", float_arr([100.0, 200.0])),
+            ("SWAT    ", float_arr([0.1, 0.2])),
+            ("SGAS    ", float_arr([0.2, 0.3])),
+            ("HOSTGRID", ["        "]),
+            ("DEPTH   ", float_arr([0.5, 2.5])),
+        ],
+    )
+
+    rft_config = RFTConfig(
+        input_files=["BASE.RFT"],
+        data_to_read={"WELL": {"2000-01-01": ["*"]}},
+        locations=[
+            WellpathLocation((25.0, 25.0, 0.5), zone_name=None, md=0.5),
+            WellpathLocation((25.0, 25.0, 1.5), zone_name=None, md=1.5),
+            WellpathLocation((25.0, 25.0, 2.5), zone_name=None, md=2.5),
+        ],
+    )
+
+    data = rft_config.read_from_file("/tmp/does_not_exist", 1, 1)
+    interpolated_values = data.filter(pl.col("k") == 2)
+
+    assert {
+        k: v
+        for (k, v) in zip(
+            interpolated_values["property"].to_list(),
+            interpolated_values["values"].to_list(),
+        )
+    } == {"PRESSURE": 150.0, "SWAT": 0.15, "SGAS": 0.25}
