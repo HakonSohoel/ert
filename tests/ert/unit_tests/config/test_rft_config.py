@@ -1,12 +1,10 @@
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
 import polars as pl
 import pytest
-import resfo
 
 from ert.config import (
     CircleShapeConfig,
@@ -31,16 +29,6 @@ def _clear_rft_caches():
     yield
     _read_egrid.cache_clear()
     _get_zonemap.cache_clear()
-
-
-@pytest.fixture
-def mock_resfo_file(mocked_files):
-    def inner(filename, contents):
-        buffer = BytesIO()
-        resfo.write(buffer, contents)
-        mocked_files[filename] = buffer.getvalue()
-
-    return inner
 
 
 def test_that_rfts_match_key_is_well_connection_cell():

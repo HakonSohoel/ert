@@ -1,8 +1,12 @@
+import datetime
 import shutil
 import time
+from functools import partial
 from pathlib import Path
+from unittest.mock import MagicMock, PropertyMock
 
 import numpy as np
+import polars as pl
 import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -15,8 +19,16 @@ from PyQt6.QtWidgets import (
 )
 
 from ert.config import ErtConfig, SummaryConfig
+from ert.config.rft_config import RFTConfig
 from ert.gui.ertnotifier import ErtNotifier
 from ert.gui.tools.manage_experiments import ManageExperimentsPanel
+from ert.gui.tools.manage_experiments.rft_qc_widget import (
+    FilterPanel,
+    RftQcWidget,
+    _add_status_col_to_df,
+    _PointStatus,
+    _unique_points_per_coordinate,
+)
 from ert.gui.tools.manage_experiments.storage_info_widget import (
     ExportDialog,
     _EnsembleWidget,
@@ -31,6 +43,7 @@ from ert.storage import (
     Storage,
     open_storage,
 )
+from tests.ert.rft_generator import cell_start, create_egrid
 from tests.ert.ui_tests.cli.analysis.test_adaptive_localization import (
     run_cli_ES_with_case,
 )
@@ -798,3 +811,482 @@ def test_that_storage_widget_sorts_by_name_and_created(qtbot):
 
     tree_view.sortByColumn(1, Qt.SortOrder.DescendingOrder)
     qtbot.waitUntil(lambda: current_child_names() == ["b-ens", "a-ens"], timeout=500)
+
+
+RFT_OBSERVATION_SCHEMA = {
+    "response_key": pl.String,
+    "well": pl.String,
+    "date": pl.String,
+    "observation_key": pl.String,
+    "east": pl.Float32,
+    "north": pl.Float32,
+    "tvd": pl.Float32,
+    "md": pl.Float32,
+    "zone": pl.String,
+    "observations": pl.Float32,
+    "std": pl.Float32,
+    "radius": pl.Float32,
+    "actual_zones": pl.List(pl.String),
+    "well_connection_cell": pl.Array(pl.Int64, 3),
+    "well_connection_cell_center": pl.Array(pl.Float32, 3),
+    "expected_zone": pl.String,
+    "qc_error": pl.String,
+}
+
+float_arr = partial(np.array, dtype=np.float32)
+
+
+def test_that_rft_qc_widget_loads_observations_responses_and_file_rft(
+    qtbot, mocked_files, mock_resfo_file
+):
+    # -- Fake observations (as returned by add_rft_metadata_and_qc) --
+    observations = pl.DataFrame(
+        {
+            "response_key": ["WELL_A:2000-01-01:PRESSURE"] * 4
+            + ["WELL_B:2001-01-01:PRESSURE"] * 3,
+            "well": ["WELL_A"] * 4 + ["WELL_B"] * 3,
+            "date": ["2000-01-01"] * 4 + ["2001-01-01"] * 3,
+            "observation_key": ["OBS1", "OBS2", "OBS3", "OBS4", "OBS5", "OBS6", "OBS7"],
+            "east": [100.0, 100.0, 110.0, 100.0, 200.0, 240.0, 180.0],
+            "north": [100.0, 100.0, 100.0, 100.0, 200.0, 240.0, 180.0],
+            "tvd": [100.0, 200.0, 290.0, 400.0, 300.0, 420.0, 480.0],
+            "md": [110.0, 120.0, 130.0, 440.0, 330.0, 440.0, 500.0],
+            "zone": ["wrong_zone"] + ["zone2"] * 5 + ["wrong_zone"],
+            "observations": [111.0, 222.0, 333.0, 444.0, 555.0, 556.0, 655.0],
+            "std": [5.0] * 7,
+            "radius": [None] * 7,
+            "actual_zones": [["zone2"]] * 7,
+            "well_connection_cell": [
+                [1, 1, 1],
+                [1, 1, 2],
+                [1, 1, 3],
+                [1, 1, 4],
+                None,
+                [2, 2, 4],
+                [2, 2, 5],
+            ],
+            "well_connection_cell_center": [
+                [100.0, 100.0, 100.0],
+                [100.0, 100.0, 200.0],
+                [100.0, 100.0, 300.0],
+                [100.0, 100.0, 400.0],
+                None,
+                [200.0, 200.0, 400.0],
+                [200.0, 200.0, 500.0],
+            ],
+            "expected_zone": ["wrong_zone"] + ["zone2"] * 5 + ["wrong_zone"],
+            "qc_error": [
+                (
+                    "expected zone 'wrong_zone' did not match any of the simulated "
+                    "zones: zone2"
+                )
+            ]
+            + [None] * 3
+            + [("did not find grid coordinate for location 200, 200, 300")]
+            + [None]
+            + [
+                (
+                    "expected zone 'wrong_zone' did not match any of the simulated "
+                    "zones: zone2"
+                )
+            ],
+        },
+        schema=RFT_OBSERVATION_SCHEMA,
+    )
+
+    # -- Fake responses (as returned by load_responses) --
+    responses = pl.DataFrame(
+        {
+            "response_key": ["WELL_A:2000-01-01:PRESSURE"] * 5
+            + ["WELL_B:2001-01-01:PRESSURE"],
+            "well": ["WELL_A"] * 5 + ["WELL_B"],
+            "date": ["2000-01-01"] * 5 + ["2001-01-01"],
+            "property": ["PRESSURE"] * 4 + ["SWAT", "PRESSURE"],
+            "time": [datetime.date(2000, 1, 1)] * 6,
+            "depth": [100, 200, 300, 500, 500, 500],
+            "values": [112.0, 223.0, 334.0, 556.0, 0.7, 555.0],
+            "well_connection_cell": [
+                [1, 1, 1],
+                [1, 1, 2],
+                [1, 1, 3],
+                [1, 1, 5],
+                [1, 1, 5],
+                [2, 2, 5],
+            ],
+            "cell_center": [
+                [100.0, 100.0, 100.0],
+                [100.0, 100.0, 200.0],
+                [100.0, 100.0, 300.0],
+                [100.0, 100.0, 500.0],
+                [100.0, 100.0, 500.0],
+                [200.0, 200.0, 500.0],
+            ],
+            "cell_zones": [["zone2"]] * 6,
+        },
+        schema={
+            "response_key": pl.String,
+            "well": pl.String,
+            "date": pl.String,
+            "property": pl.String,
+            "time": pl.Date,
+            "depth": pl.Float32,
+            "values": pl.Float32,
+            "well_connection_cell": pl.Array(pl.Int64, 3),
+            "cell_center": pl.Array(pl.Float32, 3),
+            "cell_zones": pl.List(pl.String),
+        },
+    )
+
+    # -- Mock ensemble --
+    ensemble = MagicMock()
+    experiment = MagicMock()
+    experiment.observations = {
+        "rft": observations.select(
+            [
+                c
+                for c in observations.columns
+                if c
+                in {
+                    "response_key",
+                    "well",
+                    "date",
+                    "observation_key",
+                    "east",
+                    "north",
+                    "tvd",
+                    "md",
+                    "zone",
+                    "observations",
+                    "std",
+                    "radius",
+                }
+            ]
+        )
+    }
+    type(ensemble).experiment = PropertyMock(return_value=experiment)
+    ensemble.add_rft_metadata_and_qc.return_value = observations
+    ensemble.load_responses.return_value = responses
+
+    # -- Create widget and update --
+    widget = RftQcWidget()
+    qtbot.addWidget(widget)
+    widget.update_realization(ensemble, 0)
+
+    # -- Write a synthetic RFT + EGRID and load it through the widget --
+    PATH_DOES_NOT_EXIST = "path/does/not/exist"
+    egrid_path = f"{PATH_DOES_NOT_EXIST}/BASE.EGRID"
+    rft_path = f"{PATH_DOES_NOT_EXIST}/BASE.RFT"
+    zonemap_path = f"{PATH_DOES_NOT_EXIST}/zonemap.txt"
+    mocked_files[zonemap_path] = "1 zone2\n2 zone2\n3 zone2\n4 zone2\n5 zone2\n"
+    mock_resfo_file(egrid_path, create_egrid(2, 2, 5, 100, 100, 100, 50, 50, 50))
+    pressure_values = np.linspace(110.0, 460.0, num=4, dtype=np.float32)
+    mock_resfo_file(
+        rft_path,
+        [
+            *cell_start(
+                date=(1, 1, 2000),
+                well_name=b"WELL_A_WITH_TYPO",
+                ijks=[(1, 1, 4)],
+            ),
+            ("PRESSURE", [445.0]),
+            *cell_start(
+                date=(1, 1, 2000),
+                well_name=b"WELL_C",
+                ijks=[(1, 2, k) for k in range(1, 5)],
+            ),
+            ("PRESSURE", pressure_values),
+            ("DEPTH   ", float_arr([100, 200, 300, 400])),
+        ],
+    )
+
+    widget._current_runpath = PATH_DOES_NOT_EXIST
+    widget._current_rft_config = RFTConfig(
+        input_files=["BASE"],
+        data_to_read={"*": {"*": ["*"]}},
+        zonemap=Path("zonemap.txt"),
+        approximate_missing_values=False,
+    )
+    widget._current_rft_file_path = widget._get_rft_file_path(
+        widget._current_runpath, widget._current_rft_config
+    )
+    widget._on_toggle_file_rft(True)
+
+    def _filter_values(list_widget) -> set[str]:
+        return {
+            list_widget.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(list_widget.count())
+        }
+
+    # Filters should be populated from observations, responses and the file RFT
+    assert {"WELL_A", "WELL_B"} <= _filter_values(widget._filter_panel._well_list)
+    assert {"2000-01-01", "2001-01-01"} <= _filter_values(
+        widget._filter_panel._date_list
+    )
+    assert "PRESSURE" in _filter_values(widget._filter_panel._property_list)
+
+    # Observations and responses should be stored
+    assert not widget._observations.is_empty()
+    assert not widget._responses.is_empty()
+
+    # Toggle coordinate mode
+    assert widget._use_utm is False
+    widget._filter_panel._toggle_utm_coords.setChecked(True)
+    assert widget._use_utm is True
+
+    # File RFT was loaded and merged into the plot
+    assert not widget._file_responses.is_empty()
+    assert widget._current_rft_file_path is not None
+    assert widget._load_rft_file_toggle.isEnabled()
+    assert _PointStatus.FILE_RFT in _filter_values(widget._filter_panel._status_list)
+
+
+def _obs_frame_for_attach_status(
+    well_connection_cell: list[list[int] | None],
+    expected_zone: list[str],
+    actual_zones: list[list[str]],
+    tag: list[str],
+) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "response_key": ["WELL:2000-01-01:PRESSURE"] * len(tag),
+            "well_connection_cell": well_connection_cell,
+            "expected_zone": expected_zone,
+            "actual_zones": actual_zones,
+            "tag": tag,
+        },
+        schema={
+            "response_key": pl.String,
+            "well_connection_cell": pl.Array(pl.Int64, 3),
+            "expected_zone": pl.String,
+            "actual_zones": pl.List(pl.String),
+            "tag": pl.String,
+        },
+    )
+
+
+def test_that_attach_status_classifies_points_by_grid_zone_and_response():
+    observations = _obs_frame_for_attach_status(
+        well_connection_cell=[[1, 1, 1], [1, 1, 2], None, [1, 1, 3]],
+        expected_zone=["zoneA", "zoneA", "zoneA", "wrong_zone"],
+        actual_zones=[["zoneA"], ["zoneA"], ["zoneA"], ["zoneA"]],
+        tag=["matched", "no_response", "not_in_grid", "invalid_zone"],
+    )
+    responses = pl.DataFrame(
+        {
+            "response_key": ["WELL:2000-01-01:PRESSURE"],
+            "well_connection_cell": [[1, 1, 1]],
+            "values": [42.0],
+        },
+        schema={
+            "response_key": pl.String,
+            "well_connection_cell": pl.Array(pl.Int64, 3),
+            "values": pl.Float32,
+        },
+    )
+
+    result = RftQcWidget._attach_status(observations, responses)
+
+    status_by_tag = dict(
+        zip(result["tag"].to_list(), result["status"].to_list(), strict=True)
+    )
+    assert status_by_tag == {
+        "matched": _PointStatus.MATCHED.value,
+        "no_response": _PointStatus.NO_RESPONSE.value,
+        "not_in_grid": _PointStatus.NOT_IN_GRID.value,
+        "invalid_zone": _PointStatus.INVALID_ZONE.value,
+    }
+    assert "values" not in result.columns
+
+
+def test_that_attach_status_returns_empty_observations_unchanged():
+    empty = _obs_frame_for_attach_status([], [], [], []).clear()
+    responses = pl.DataFrame(
+        {"response_key": [], "well_connection_cell": [], "values": []},
+        schema={
+            "response_key": pl.String,
+            "well_connection_cell": pl.Array(pl.Int64, 3),
+            "values": pl.Float32,
+        },
+    )
+
+    result = RftQcWidget._attach_status(empty, responses)
+
+    assert result.is_empty()
+    assert "status" not in result.columns
+
+
+def test_that_add_status_col_leaves_empty_dataframe_without_status_column():
+    empty = pl.DataFrame(schema={"east": pl.Float32})
+
+    result = _add_status_col_to_df(empty, _PointStatus.RESPONSE.value)
+
+    assert "status" not in result.columns
+
+
+def test_that_add_status_col_sets_status_on_nonempty_dataframe():
+    df = pl.DataFrame({"east": [1.0, 2.0]})
+
+    result = _add_status_col_to_df(df, _PointStatus.RESPONSE.value)
+
+    assert result["status"].to_list() == [_PointStatus.RESPONSE.value] * 2
+
+
+def test_that_unique_points_per_coordinate_keeps_highest_priority_status():
+    df = pl.DataFrame(
+        {
+            "east": [1.0, 1.0, 2.0],
+            "north": [1.0, 1.0, 2.0],
+            "tvd": [1.0, 1.0, 2.0],
+            "status": [
+                _PointStatus.RESPONSE.value,
+                _PointStatus.MATCHED.value,
+                _PointStatus.NO_RESPONSE.value,
+            ],
+        }
+    )
+
+    result = _unique_points_per_coordinate(df)
+
+    assert result.height == 2
+    statuses = result["status"].to_list()
+    # The duplicated coordinate keeps MATCHED (priority 0) and drops RESPONSE.
+    assert _PointStatus.RESPONSE.value not in statuses
+    assert sorted(statuses) == sorted(
+        [_PointStatus.MATCHED.value, _PointStatus.NO_RESPONSE.value]
+    )
+
+
+def test_that_validate_required_columns_raises_listing_missing_columns():
+    df = pl.DataFrame({"east": [1.0]})
+
+    with pytest.raises(ValueError, match=r"Observations.*missing expected columns"):
+        RftQcWidget._validate_required_columns(
+            df, frozenset({"east", "north"}), context="Observations"
+        )
+
+
+def test_that_validate_required_columns_accepts_complete_dataframe():
+    df = pl.DataFrame({"east": [1.0], "north": [1.0]})
+
+    RftQcWidget._validate_required_columns(df, frozenset({"east", "north"}))
+
+
+def test_that_get_rft_file_path_is_none_without_runpath_or_config():
+    config = RFTConfig(input_files=["BASE"], data_to_read={}, zonemap=None)
+
+    assert RftQcWidget._get_rft_file_path(None, config) is None
+    assert RftQcWidget._get_rft_file_path("/run", None) is None
+
+
+def test_that_get_rft_file_path_joins_runpath_and_expected_input_file():
+    config = RFTConfig(input_files=["BASE"], data_to_read={}, zonemap=None)
+
+    assert RftQcWidget._get_rft_file_path("/run", config) == Path("/run") / "BASE.RFT"
+
+
+def _make_filter_panel() -> FilterPanel:
+    return FilterPanel(
+        on_item_selection_change=lambda: None,
+        on_fit_to_selection_button_clicked=lambda: None,
+        on_center_on_selected_button_clicked=lambda: None,
+        on_toggle_utm_coords_clicked=lambda _checked: None,
+        use_utm=False,
+    )
+
+
+def _select_only(list_widget, value: str) -> None:
+    list_widget.clearSelection()
+    for i in range(list_widget.count()):
+        item = list_widget.item(i)
+        if item.data(Qt.ItemDataRole.UserRole) == value:
+            item.setSelected(True)
+
+
+def test_that_filter_panel_filters_rows_to_selected_values(qtbot):
+    panel = _make_filter_panel()
+    qtbot.addWidget(panel)
+    df = pl.DataFrame({"well": ["A", "B", "C"], "value": [1, 2, 3]})
+    panel.populate_filters([df])
+
+    _select_only(panel._well_list, "A")
+
+    assert panel.apply_filter(df)["well"].to_list() == ["A"]
+
+
+def test_that_filter_panel_facet_counts_reflect_other_filter_selections(qtbot):
+    panel = _make_filter_panel()
+    qtbot.addWidget(panel)
+    df = pl.DataFrame({"well": ["A", "A", "B"], "status": ["S1", "S2", "S1"]})
+    panel.populate_filters([df])
+
+    _select_only(panel._well_list, "A")
+
+    assert panel._facet_counts("status", [df]) == {"S1": 1, "S2": 1}
+
+
+def test_that_toggling_file_rft_with_missing_file_keeps_file_responses_empty(qtbot):
+    widget = RftQcWidget()
+    qtbot.addWidget(widget)
+    widget._current_runpath = "/does/not/exist"
+    widget._current_rft_config = RFTConfig(
+        input_files=["BASE"],
+        data_to_read={"*": {"*": ["*"]}},
+        zonemap=None,
+    )
+    widget._current_rft_file_path = Path("/does/not/exist/BASE.RFT")
+
+    widget._on_toggle_file_rft(True)
+
+    assert widget._load_rft_file is True
+    assert widget._file_responses.is_empty()
+
+
+def test_that_loading_realization_with_missing_observation_columns_raises(qtbot):
+    # Observations missing the required "well_connection_cell_center" column.
+    malformed_observations = pl.DataFrame(
+        {
+            "response_key": ["WELL:2000-01-01:PRESSURE"],
+            "well_connection_cell": [[1, 1, 1]],
+            "expected_zone": ["zoneA"],
+            "actual_zones": [["zoneA"]],
+            "east": [1.0],
+            "north": [1.0],
+            "tvd": [1.0],
+        },
+        schema={
+            "response_key": pl.String,
+            "well_connection_cell": pl.Array(pl.Int64, 3),
+            "expected_zone": pl.String,
+            "actual_zones": pl.List(pl.String),
+            "east": pl.Float32,
+            "north": pl.Float32,
+            "tvd": pl.Float32,
+        },
+    )
+    responses = pl.DataFrame(
+        {
+            "response_key": ["WELL:2000-01-01:PRESSURE"],
+            "well_connection_cell": [[1, 1, 1]],
+            "cell_center": [[1.0, 1.0, 1.0]],
+            "values": [1.0],
+        },
+        schema={
+            "response_key": pl.String,
+            "well_connection_cell": pl.Array(pl.Int64, 3),
+            "cell_center": pl.Array(pl.Float32, 3),
+            "values": pl.Float32,
+        },
+    )
+
+    ensemble = MagicMock()
+    experiment = MagicMock()
+    experiment.observations = {"rft": malformed_observations}
+    type(ensemble).experiment = PropertyMock(return_value=experiment)
+    ensemble.add_rft_metadata_and_qc.return_value = malformed_observations
+    ensemble.load_responses.return_value = responses
+
+    widget = RftQcWidget()
+    qtbot.addWidget(widget)
+
+    with pytest.raises(ValueError, match=r"Observations.*missing expected columns"):
+        widget.update_realization(ensemble, 0)
