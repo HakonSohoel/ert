@@ -5,13 +5,13 @@ from collections.abc import Iterator
 from enum import StrEnum, auto
 from hashlib import sha256
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 import numpy as np
 import polars as pl
 import xarray as xr
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 if TYPE_CHECKING:
     import numpy.typing as npt
@@ -49,7 +49,26 @@ class ParameterConfig(BaseModel):
     type: str
     name: str
     forward_init: bool
-    update_strategy: LocalizationType | None
+    update_strategy: LocalizationType | None = None
+
+    # TEMP: allow opening storage version 28, where parameter configs stored an
+    # `update` boolean instead of `update_strategy`. Maps the old field so the QC
+    # tool can inspect pre-migration user runs without migrating the storage.
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_update_bool_to_strategy(cls, data: Any) -> Any:
+        if (
+            isinstance(data, dict)
+            and "update_strategy" not in data
+            and "update" in data
+        ):
+            data = {
+                **data,
+                "update_strategy": (
+                    LocalizationType.GLOBAL.value if data["update"] else None
+                ),
+            }
+        return data
 
     @property
     @abstractmethod

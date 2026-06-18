@@ -71,6 +71,11 @@ class ExperimentConfig(TypedDict, total=False):
     Different experiment types persist different subsets of keys.
     """
 
+    # TEMP: Ignore legacy v28 experiment-metadata fields (storage_path,
+    # queue_config, forward_model_steps, etc.) that are still present in older
+    # on-disk experiment indexes. Restore (remove this) before merging.
+    __pydantic_config__ = {"extra": "ignore"}  # type: ignore[misc]
+
     experiment_type: ExperimentType
 
     # Initial-ensemble fields

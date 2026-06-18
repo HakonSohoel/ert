@@ -31,7 +31,9 @@ from .realization_storage_state import RealizationStorageState
 
 logger = logging.getLogger(__name__)
 
-_LOCAL_STORAGE_VERSION = 29
+# TEMP: pinned to 28 so the QC tool can open pre-migration user runs as-is.
+# Restore to 29 (and the to29 migration below) before merging.
+_LOCAL_STORAGE_VERSION = 28
 
 
 class _Migrations(BaseModel, extra="forbid"):
@@ -519,7 +521,6 @@ class LocalStorage(BaseMode):
             to26,
             to27,
             to28,
-            to29,
         )
 
         try:  # noqa: PLW0717
@@ -577,7 +578,6 @@ class LocalStorage(BaseMode):
                     25: to26,
                     26: to27,
                     27: to28,
-                    28: to29,
                 }
                 for from_version in range(version, _LOCAL_STORAGE_VERSION):
                     migrations[from_version].migrate(self.path)
