@@ -147,6 +147,16 @@ def _add_status_col_to_df(df: pl.DataFrame, status: str) -> pl.DataFrame:
     return df
 
 
+def _ensure_well_connection_cell_center(df: pl.DataFrame) -> pl.DataFrame:
+    if "well_connection_cell_center" in df.columns:
+        return df
+    if "cell_center" in df.columns:
+        return df.rename({"cell_center": "well_connection_cell_center"})
+    return df.with_columns(
+        pl.lit(None).cast(pl.Array(pl.Float32, 3)).alias("well_connection_cell_center")
+    )
+
+
 # Lower number means higher priority when several points share a coordinate; the
 # highest-priority status is the one kept for that coordinate.
 _STATUS_PRIORITY: dict[str, int] = {
@@ -231,6 +241,19 @@ class FilterPanel(QWidget):
         filter_layout.addWidget(self._toggle_utm_coords)
 
         self.setLayout(filter_layout)
+
+    def set_utm_enabled(self, enabled: bool) -> None:
+        self._toggle_utm_coords.setEnabled(enabled)
+        if not enabled and self._toggle_utm_coords.isChecked():
+            self._toggle_utm_coords.blockSignals(True)
+            self._toggle_utm_coords.setChecked(False)
+            self._toggle_utm_coords.blockSignals(False)
+        self._toggle_utm_coords.setToolTip(
+            ""
+            if enabled
+            else "Some points are missing east/north/tvd coordinates; "
+            "UTM view is unavailable"
+        )
 
     def populate_filters(self, dataframes: list[pl.DataFrame]) -> None:
         self.dfs_to_filter = dataframes
@@ -935,15 +958,15 @@ class RftQcWidget(QWidget):
     )
 
     def _load_realization(self, ensemble: Ensemble, realization: int):
-        observations = self._get_observations(ensemble, realization)
-        responses = (
+        observations = _ensure_well_connection_cell_center(
+            self._get_observations(ensemble, realization)
+        )
+        responses = _ensure_well_connection_cell_center(
             ensemble.load_responses("rft", (realization,))
-            .rename({"cell_center": "well_connection_cell_center"})
-            .with_columns(
-                pl.col("well_connection_cell_center").arr.get(0).alias("east"),
-                pl.col("well_connection_cell_center").arr.get(1).alias("north"),
-                pl.col("well_connection_cell_center").arr.get(2).alias("tvd"),
-            )
+        ).with_columns(
+            pl.col("well_connection_cell_center").arr.get(0).alias("east"),
+            pl.col("well_connection_cell_center").arr.get(1).alias("north"),
+            pl.col("well_connection_cell_center").arr.get(2).alias("tvd"),
         )
         self._observations = self._attach_status(observations, responses)
         self._responses = _add_status_col_to_df(responses, _PointStatus.RESPONSE)
@@ -960,6 +983,7 @@ class RftQcWidget(QWidget):
         if self._load_rft_file:
             self._load_file_rft()
         self._filter_panel.populate_filters(self._dfs_for_filters())
+        self._refresh_utm_availability()
         self._apply_filter_and_redraw(preserve_view=False)
 
     def _apply_filter_and_redraw(self, *, preserve_view=True) -> None:
@@ -1012,6 +1036,23 @@ class RftQcWidget(QWidget):
     def _dfs_for_filters(self) -> list[pl.DataFrame]:
         return [self._observations, self._responses, self._file_responses]
 
+    def _utm_coords_available(self) -> bool:
+        coord_columns = ("east", "north", "tvd")
+        for df in self._dfs_for_filters():
+            if df.is_empty():
+                continue
+            if not all(c in df.columns for c in coord_columns):
+                return False
+            if any(df.select(coord_columns).null_count().row(0)):
+                return False
+        return True
+
+    def _refresh_utm_availability(self) -> None:
+        utm_available = self._utm_coords_available()
+        if not utm_available:
+            self._use_utm = False
+        self._filter_panel.set_utm_enabled(utm_available)
+
     # ─── Coordinate toggle ─────────────────────────────────────────────
 
     def _on_coord_toggle(self, checked: bool) -> None:
@@ -1028,6 +1069,7 @@ class RftQcWidget(QWidget):
             self._file_responses = _empty_df()
         self._update_load_rft_file_toggle_enabled_state()
         self._filter_panel.populate_filters(self._dfs_for_filters())
+        self._refresh_utm_availability()
         self._apply_filter_and_redraw(preserve_view=False)
 
     def _load_file_rft(self) -> None:
@@ -1038,14 +1080,12 @@ class RftQcWidget(QWidget):
             and self._current_rft_file_path.exists()
         ):
             try:
-                rft_file_df = (
+                rft_file_df = _ensure_well_connection_cell_center(
                     self._current_rft_config.read_from_file(self._current_runpath, 0, 0)
-                    .rename({"cell_center": "well_connection_cell_center"})
-                    .with_columns(
-                        pl.col("well_connection_cell_center").arr.get(0).alias("east"),
-                        pl.col("well_connection_cell_center").arr.get(1).alias("north"),
-                        pl.col("well_connection_cell_center").arr.get(2).alias("tvd"),
-                    )
+                ).with_columns(
+                    pl.col("well_connection_cell_center").arr.get(0).alias("east"),
+                    pl.col("well_connection_cell_center").arr.get(1).alias("north"),
+                    pl.col("well_connection_cell_center").arr.get(2).alias("tvd"),
                 )
                 self._file_responses = _add_status_col_to_df(
                     rft_file_df, _PointStatus.FILE_RFT
