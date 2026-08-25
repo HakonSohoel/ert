@@ -1151,8 +1151,8 @@ def _rft_observation_for_approximation(
     east: float = 5.0,
     north: float = 5.0,
     tvd: float = 15.0,
-    well_connection_cell: tuple[int, int, int] = (1, 1, 3),
-    well_connection_cell_center: tuple[float, float, float] = (5.0, 5.0, 25.0),
+    well_connection_cell: tuple[int, int, int] | None = (1, 1, 3),
+    well_connection_cell_center: tuple[float, float, float] | None = (5.0, 5.0, 25.0),
     zone: str | None = "zone1",
 ) -> pl.DataFrame:
     def _make_dataframe(prop: str) -> pl.DataFrame:
@@ -1324,6 +1324,16 @@ def _expected_approximated_values(
                 "available. I.e. no zonemap file."
             ),
         ),
+        pytest.param(
+            _rft_responses_for_approximation(),
+            _rft_observation_for_approximation(
+                tvd=25.0,
+                well_connection_cell=None,  # <= observation is outside the grid
+                well_connection_cell_center=None,  # <= observation is outside the grid
+            ),
+            None,
+            id=("Test that approximation is not done when observation is outside grid"),
+        ),
     ],
 )
 def test_rft_value_approximation(
@@ -1335,8 +1345,14 @@ def test_rft_value_approximation(
         responses=rft_responses, observations=rft_observations
     )
 
+    observation_cell, observation_depth = (
+        rft_observations["well_connection_cell"][0],
+        rft_observations["tvd"][0],
+    )
     approximated_values = responses_with_approximations.filter(
-        pl.col("well_connection_cell") == [1, 1, 3]  # The cell of the observation
+        pl.col("well_connection_cell") == observation_cell.to_list()
+        if observation_cell is not None
+        else pl.col("depth") == observation_depth
     ).collect()
 
     assert dict(
