@@ -538,16 +538,6 @@ class RFTConfig(SimulationResponseConfig):
             how="anti",
         )
 
-        # Only attempt to approximate missing values for observations that have a
-        # well connection cell since currently observations and responses are matched
-        # based on well connection cell.
-        # Responses could be approximated for observations without a
-        # well connection cell based on its utm coordinates, however this will require
-        # a fallback mechanism to match responses to observations when
-        # the well_connection_cell is None.
-        observations_with_missing_response = observations_with_missing_response.filter(
-            pl.col("well_connection_cell").is_not_null()
-        )
         if observations_with_missing_response.is_empty():
             return responses
 
@@ -621,14 +611,13 @@ class RFTConfig(SimulationResponseConfig):
             # are associated with cells. Fall back to the east, north, tvd coordinates
             # of the observation if the cell center is not available due to legacy
             # location metadata.
-            missing_response_point = missing.get(
-                "well_connection_cell_center",
-                (
+            missing_response_point = missing.get("well_connection_cell_center")
+            if missing_response_point is None:
+                missing_response_point = (
                     missing["east"],
                     missing["north"],
                     missing["tvd"],
-                ),
-            )
+                )
 
             # Find candidate points for interpolation/extrapolation within the same
             # zone.
